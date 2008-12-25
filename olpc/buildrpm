@@ -1,0 +1,60 @@
+#!/bin/bash
+# RPM build script for XO kernels
+# Must be run outside of the kernel's build system (i.e. cannot be invoked
+# by a Makefile), because uninitialized/incorrect variables would be copied
+# from that build environment (see #10994).
+
+mydir=$(readlink -f $(dirname $0))
+specdir=$mydir/SPECS
+xo_version=$1
+
+# inherit builddir and rpm_outdir from env for olpc-kernel-builder
+[ -z "$builddir" ] && builddir="/tmp/olpc-kernel-$(whoami)"
+[ -z "$rpm_outdir" ] && rpm_outdir="$mydir/RPMS"
+
+if [ "$xo_version" = "1.0" ]; then
+	rpm_target="i586"
+	xo_version="1"
+	defconfig="xo_1_defconfig"
+elif [ "$xo_version" = "1.5" ]; then
+	rpm_target="i586"
+	xo_version="1.5"
+	defconfig="xo_1.5_defconfig"
+elif [ "$xo_version" = "1.75" ]; then
+	rpm_target="armv7l"
+	xo_version="1.75"
+	defconfig="xo_1.75_defconfig"
+else
+	echo "Usage: $0 <laptop_model>"
+	echo "Available models: 1.0 1.5 1.75"
+	exit 1
+fi
+
+cd ${mydir}/..
+sublevel=$(grep "^SUBLEVEL" Makefile)
+sublevel=${sublevel#*=}
+patchlevel=$(grep "^PATCHLEVEL" Makefile)
+patchlevel=${patchlevel#*=}
+extraversion=$(grep "^EXTRAVERSION" Makefile)
+extraversion=${extraversion#*=}
+extraversion=${extraversion/-/_}
+head=$(git log -n1 --pretty=format:%h)
+
+make olpc-tarball
+mkdir -p $builddir $rpm_outdir
+rpmbuild -ba $specdir/kernel.spec \
+        --target=$rpm_target \
+        --define "patchlevel $patchlevel" \
+        --define "sublevel $sublevel" \
+        --define "extraversion $extraversion" \
+        --define "_builddir $builddir" \
+        --define "_rpmdir $rpm_outdir" \
+        --define "_sourcedir $mydir/SOURCES" \
+        --define "_specdir $specdir" \
+        --define "_srcrpmdir $rpm_outdir" \
+        --define "head $head" \
+        --define "olpc 1" \
+        --define "dist olpc" \
+        --define "xoversion $xo_version" \
+        --define "defconfig $defconfig"
+

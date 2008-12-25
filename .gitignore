@@ -59,6 +59,9 @@ modules.builtin
 #
 # Generated include files
 #
+# This breaks our RPM build target...
+# include/asm
+# include/asm-*/asm-offsets.h
 include/config
 include/linux/version.h
 include/generated
@@ -84,3 +87,11 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# olpc RPM build files
+olpc/RPMS
+olpc/BUILD
+olpc/SRPMS
+olpc/SOURCES/linux-*
+olpc/SOURCES/*.config
+olpc/SOURCES/*.tar.bz2

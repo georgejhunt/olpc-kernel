@@ -1147,6 +1147,9 @@ modules modules_install: FORCE
 
 endif # CONFIG_MODULES
 
+include $(srctree)/olpc/Makefile
+vmlinux-alldirs += olpc
+
 ###
 # Cleaning is done on three levels.
 # make clean     Delete most generated files
