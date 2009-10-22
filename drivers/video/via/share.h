@@ -87,6 +87,7 @@
 #define SR3E    0x3E
 #define SR3F    0x3F
 #define SR40    0x40
+#define SR42    0x42
 #define SR43    0x43
 #define SR44    0x44
 #define SR45    0x45
@@ -97,6 +98,8 @@
 #define SR4A    0x4A
 #define SR4B    0x4B
 #define SR4C    0x4C
+#define SR4F    0x4F
+#define SR50    0x50
 #define SR52    0x52
 #define SR57	0x57
 #define SR58	0x58

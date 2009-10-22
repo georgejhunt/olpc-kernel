@@ -105,6 +105,12 @@
 #define VIA_REG_CURSOR_BG       0x2DC
 #define VIA_REG_CURSOR_FG       0x2E0
 
+/* ARGB Hardware Icon engine register for XO */
+#define VIA_REG_HI_POSSTART     0x208
+#define VIA_REG_HI_CENTEROFFSET 0x20C
+#define VIA_REG_HI_FBOFFSET		0x224
+#define VIA_REG_HI_CONTROL		0x260
+
 /* VIA_REG_GEMODE(0x04): GE mode */
 #define VIA_GEM_8bpp            0x00000000
 #define VIA_GEM_16bpp           0x00000100

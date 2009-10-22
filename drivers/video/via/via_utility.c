@@ -233,6 +233,35 @@ void viafb_get_gamma_table(unsigned int *gamma_table)
 	viafb_write_reg(SR1A, VIASR, sr1a);
 }
 
+void viafb_disable_gamma(void)
+{
+	/* Disable gamma on Primary */ 
+	switch (viaparinfo->chip_info->gfx_chip_name) {
+	case UNICHROME_CLE266:
+	case UNICHROME_K400:
+		viafb_write_reg_mask(SR16, VIASR, 0x00, BIT7);
+		break;
+	default:
+		viafb_write_reg_mask(CR33, VIACR, 0x00, BIT7);
+		break;
+	}
+
+	/* Disable gamma on Secondary */ 
+	viafb_write_reg_mask(SR1A, VIASR, 0x0, BIT0);
+	viafb_write_reg_mask(CR6A, VIACR, 0x0, BIT1);
+
+	switch (viaparinfo->chip_info->gfx_chip_name) {
+	case UNICHROME_CLE266:
+	case UNICHROME_K400:
+	case UNICHROME_K800:
+	case UNICHROME_PM800:
+		break;
+	default:
+		viafb_write_reg_mask(CR6A, VIACR, 0x00, BIT5);
+		break;
+	}
+}
+
 void viafb_get_gamma_support_state(int bpp, unsigned int *support_state)
 {
 	if (bpp == 8)

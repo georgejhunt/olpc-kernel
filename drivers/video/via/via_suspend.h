@@ -18,18 +18,15 @@
  * Foundation, Inc.,
  * 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
-#ifndef __VIAUTILITY_H__
-#define __VIAUTILITY_H__
+#ifndef __VIASUSPEND_H__
+#define __VIASUSPEND_H__
 
-/* These functions are used to get information about device's state */
-void viafb_get_device_support_state(u32 *support_state);
-void viafb_get_device_connect_state(u32 *connect_state);
-bool viafb_lcd_get_support_expand_state(u32 xres, u32 yres);
+#define OVL_FORCE_UPDATE              0x00000001
 
-/* These function are used to access gamma table */
-void viafb_set_gamma_table(int bpp, unsigned int *gamma_table);
-void viafb_get_gamma_table(unsigned int *gamma_table);
-void viafb_disable_gamma(void);
-void viafb_get_gamma_support_state(int bpp, unsigned int *support_state);
+#define V3_COMMAND_FIRE               0x40000000
+#define V1_COMMAND_FIRE               0x80000000
 
-#endif /* __VIAUTILITY_H__ */
+int viafb_suspend(void *unused);
+int viafb_resume(void *unused);
+
+#endif /* __VIASUSPEND_H__ */

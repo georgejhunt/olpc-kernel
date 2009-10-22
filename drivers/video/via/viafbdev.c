@@ -23,11 +23,16 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
+#include <linux/suspend.h>
 #include <linux/via-core.h>
 #include <asm/olpc.h>
 
 #define _MASTER_FILE
 #include "global.h"
+
+#ifdef CONFIG_PM
+#include "via_suspend.h"
+#endif
 
 static char *viafb_name = "Via";
 static u32 pseudo_pal[17];
@@ -920,7 +925,7 @@ static int viafb_cursor(struct fb_info *info, struct fb_cursor *cursor)
 	return 0;
 }
 
-static int viafb_sync(struct fb_info *info)
+int viafb_sync(struct fb_info *info)
 {
 	if (!(info->flags & FBINFO_HWACCEL_DISABLED))
 		viafb_wait_engine_idle(info);
@@ -1698,35 +1703,10 @@ static int parse_mode(const char *str, u32 *xres, u32 *yres)
 
 
 #ifdef CONFIG_PM
-static int viafb_suspend(void *unused)
-{
-	console_lock();
-	fb_set_suspend(viafbinfo, 1);
-	viafb_sync(viafbinfo);
-	console_unlock();
-
-	return 0;
-}
-
-static int viafb_resume(void *unused)
-{
-	console_lock();
-	if (viaparinfo->shared->vdev->engine_mmio)
-		viafb_reset_engine(viaparinfo);
-	viafb_set_par(viafbinfo);
-	if (viafb_dual_fb)
-		viafb_set_par(viafbinfo1);
-	fb_set_suspend(viafbinfo, 0);
-
-	console_unlock();
-	return 0;
-}
-
 static struct viafb_pm_hooks viafb_fb_pm_hooks = {
 	.suspend = viafb_suspend,
 	.resume = viafb_resume
 };
-
 #endif
 
 
@@ -1897,6 +1877,8 @@ int __devinit via_fb_pci_probe(struct viafb_dev *vdev)
 
 	viafb_init_proc(viaparinfo->shared);
 	viafb_init_dac(IGA2);
+
+	pm_set_vt_switch(0);
 
 #ifdef CONFIG_PM
 	viafb_pm_register(&viafb_fb_pm_hooks);
@@ -2069,7 +2051,6 @@ static struct fb_ops viafb_ops = {
 	.fb_ioctl = viafb_ioctl,
 	.fb_sync = viafb_sync,
 };
-
 
 #ifdef MODULE
 module_param(viafb_mode, charp, S_IRUSR);

@@ -226,6 +226,11 @@ static inline void via_write_reg_mask(u16 port, u8 index, u8 data, u8 mask)
 #define VIA_MISC_REG_READ	0x03CC
 #define VIA_MISC_REG_WRITE	0x03C2
 
+static inline u8 via_read_misc_reg(void)
+{
+	return inb(VIA_MISC_REG_READ);
+}
+
 static inline void via_write_misc_reg_mask(u8 data, u8 mask)
 {
 	u8 old = inb(VIA_MISC_REG_READ);
