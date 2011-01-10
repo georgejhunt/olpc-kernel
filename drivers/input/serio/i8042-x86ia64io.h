@@ -9,6 +9,7 @@
 
 #ifdef CONFIG_X86
 #include <asm/x86_init.h>
+#include <asm/olpc.h>
 #endif
 
 /*
@@ -898,6 +899,13 @@ static inline void i8042_pnp_exit(void) { }
 
 static inline void i8042_platform_suspend(struct device *dev, bool may_wakeup)
 {
+	if (!machine_is_olpc())
+		return;
+
+	if (may_wakeup)
+		olpc_ec_wakeup_set(EC_SCI_SRC_GAME);
+	else
+		olpc_ec_wakeup_clear(EC_SCI_SRC_GAME);
 }
 
 static int __init i8042_platform_init(void)
@@ -944,6 +952,9 @@ static int __init i8042_platform_init(void)
 
 	if (dmi_check_system(i8042_dmi_dritek_table))
 		i8042_dritek = true;
+
+	if (olpc_ec_wakeup_available())
+		i8042_enable_wakeup = true;
 #endif /* CONFIG_X86 */
 
 	return retval;
