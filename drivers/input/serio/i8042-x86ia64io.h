@@ -896,6 +896,10 @@ static inline int i8042_pnp_init(void) { return 0; }
 static inline void i8042_pnp_exit(void) { }
 #endif
 
+static inline void i8042_platform_suspend(struct device *dev, bool may_wakeup)
+{
+}
+
 static int __init i8042_platform_init(void)
 {
 	int retval;

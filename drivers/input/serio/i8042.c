@@ -87,6 +87,7 @@ MODULE_PARM_DESC(debug, "Turn i8042 debugging mode on and off");
 #endif
 
 static bool i8042_bypass_aux_irq_test;
+static bool i8042_enable_wakeup;
 
 #include "i8042.h"
 
@@ -1082,9 +1083,16 @@ static void i8042_dritek_enable(void)
  * before suspending.
  */
 
-static int i8042_controller_resume(bool force_reset)
+static int i8042_controller_resume(bool force_reset, bool soft_resume)
 {
 	int error;
+
+	/*
+	 * If device is selected as a wakeup source, it was not powered down
+	 * or reset during suspend, so we have very little to do.
+	 */
+	if (soft_resume)
+		goto soft;
 
 	error = i8042_controller_check();
 	if (error)
@@ -1129,6 +1137,7 @@ static int i8042_controller_resume(bool force_reset)
 	if (i8042_ports[I8042_KBD_PORT_NO].serio)
 		i8042_enable_kbd_port();
 
+soft:
 	i8042_interrupt(0, NULL);
 
 	return 0;
@@ -1141,8 +1150,21 @@ static int i8042_controller_resume(bool force_reset)
 
 static int i8042_pm_suspend(struct device *dev)
 {
-	i8042_controller_reset(true);
+	i8042_platform_suspend(dev, device_may_wakeup(dev));
 
+	/*
+	 * If device is selected as a wakeup source, don't powerdown or reset
+	 * during suspend. Just disable IRQs to ensure race-free resume.
+	 */
+	if (device_may_wakeup(dev)) {
+		if (i8042_kbd_irq_registered)
+			disable_irq(I8042_KBD_IRQ);
+		if (i8042_aux_irq_registered)
+			disable_irq(I8042_AUX_IRQ);
+		return 0;
+	}
+
+	i8042_controller_reset(true);
 	return 0;
 }
 
@@ -1152,8 +1174,23 @@ static int i8042_pm_resume(struct device *dev)
 	 * On resume from S2R we always try to reset the controller
 	 * to bring it in a sane state. (In case of S2D we expect
 	 * BIOS to reset the controller for us.)
+	 * This function call will also handle any pending keypress event
+	 * (perhaps the system wakeup reason)
 	 */
-	return i8042_controller_resume(true);
+	int r = i8042_controller_resume(true, device_may_wakeup(dev));
+
+	/* If the device was left running during suspend, enable IRQs again
+	 * now. Must be done last to avoid races with interrupt processing
+	 * inside i8042_controller_resume.
+	 */
+	if (device_may_wakeup(dev)) {
+		if (i8042_kbd_irq_registered)
+			enable_irq(I8042_KBD_IRQ);
+		if (i8042_aux_irq_registered)
+			enable_irq(I8042_AUX_IRQ);
+	}
+
+	return r;
 }
 
 static int i8042_pm_thaw(struct device *dev)
@@ -1172,7 +1209,7 @@ static int i8042_pm_reset(struct device *dev)
 
 static int i8042_pm_restore(struct device *dev)
 {
-	return i8042_controller_resume(false);
+	return i8042_controller_resume(false, false);
 }
 
 static const struct dev_pm_ops i8042_pm_ops = {
@@ -1199,6 +1236,7 @@ static int __init i8042_create_kbd_port(void)
 {
 	struct serio *serio;
 	struct i8042_port *port = &i8042_ports[I8042_KBD_PORT_NO];
+	struct device *parent = &i8042_platform_device->dev;
 
 	serio = kzalloc(sizeof(struct serio), GFP_KERNEL);
 	if (!serio)
@@ -1210,7 +1248,10 @@ static int __init i8042_create_kbd_port(void)
 	serio->stop		= i8042_stop;
 	serio->close		= i8042_port_close;
 	serio->port_data	= port;
-	serio->dev.parent	= &i8042_platform_device->dev;
+	serio->dev.parent	= parent;
+
+	device_set_wakeup_capable(&serio->dev, device_can_wakeup(parent));
+
 	strlcpy(serio->name, "i8042 KBD port", sizeof(serio->name));
 	strlcpy(serio->phys, I8042_KBD_PHYS_DESC, sizeof(serio->phys));
 
@@ -1225,6 +1266,7 @@ static int __init i8042_create_aux_port(int idx)
 	struct serio *serio;
 	int port_no = idx < 0 ? I8042_AUX_PORT_NO : I8042_MUX_PORT_NO + idx;
 	struct i8042_port *port = &i8042_ports[port_no];
+	struct device *parent = &i8042_platform_device->dev;
 
 	serio = kzalloc(sizeof(struct serio), GFP_KERNEL);
 	if (!serio)
@@ -1235,7 +1277,10 @@ static int __init i8042_create_aux_port(int idx)
 	serio->start		= i8042_start;
 	serio->stop		= i8042_stop;
 	serio->port_data	= port;
-	serio->dev.parent	= &i8042_platform_device->dev;
+	serio->dev.parent	= parent;
+
+	device_set_wakeup_capable(&serio->dev, device_can_wakeup(parent));
+
 	if (idx < 0) {
 		strlcpy(serio->name, "i8042 AUX port", sizeof(serio->name));
 		strlcpy(serio->phys, I8042_AUX_PHYS_DESC, sizeof(serio->phys));
@@ -1280,6 +1325,9 @@ static void __init i8042_register_ports(void)
 				(unsigned long) I8042_COMMAND_REG,
 				i8042_ports[i].irq);
 			serio_register_port(i8042_ports[i].serio);
+
+			/* FIXME: Hardcode on for OLPC until final design is resolved */
+			device_set_wakeup_enable(&i8042_ports[i].serio->dev, true);
 		}
 	}
 }
@@ -1409,6 +1457,10 @@ static int __init i8042_probe(struct platform_device *dev)
 	if (i8042_dritek)
 		i8042_dritek_enable();
 #endif
+
+	/* FIXME: Hardcode on for OLPC until final design is resolved */
+	if (i8042_enable_wakeup)
+		device_init_wakeup(&dev->dev, true);
 
 	if (!i8042_noaux) {
 		error = i8042_setup_aux();

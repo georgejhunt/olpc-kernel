@@ -931,7 +931,7 @@ static int serio_uevent(struct device *dev, struct kobj_uevent_env *env)
 #endif /* CONFIG_HOTPLUG */
 
 #ifdef CONFIG_PM
-static int serio_suspend(struct device *dev)
+static int serio_poweroff(struct device *dev)
 {
 	struct serio *serio = to_serio_port(dev);
 
@@ -940,7 +940,16 @@ static int serio_suspend(struct device *dev)
 	return 0;
 }
 
-static int serio_resume(struct device *dev)
+static int serio_suspend(struct device *dev)
+{
+	/* If configured as a wakeup source, don't power off. */
+	if (device_may_wakeup(dev))
+		return 0;
+
+	return serio_poweroff(dev);
+}
+
+static int serio_restore(struct device *dev)
 {
 	struct serio *serio = to_serio_port(dev);
 
@@ -953,11 +962,23 @@ static int serio_resume(struct device *dev)
 	return 0;
 }
 
+static int serio_resume(struct device *dev)
+{
+	/*
+	 * If configured as a wakeup source, we didn't power off during
+	 * suspend, and hence have nothing to do.
+	 */
+	if (device_may_wakeup(dev))
+		return 0;
+
+	return serio_restore(dev);
+}
+
 static const struct dev_pm_ops serio_pm_ops = {
 	.suspend	= serio_suspend,
 	.resume		= serio_resume,
-	.poweroff	= serio_suspend,
-	.restore	= serio_resume,
+	.poweroff	= serio_poweroff,
+	.restore	= serio_restore,
 };
 #endif /* CONFIG_PM */
 

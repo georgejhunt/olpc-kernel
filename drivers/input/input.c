@@ -1588,6 +1588,9 @@ static int input_dev_suspend(struct device *dev)
 {
 	struct input_dev *input_dev = to_input_dev(dev);
 
+	if (device_may_wakeup(dev))
+		return 0;
+
 	mutex_lock(&input_dev->mutex);
 
 	if (input_dev->users)
@@ -1602,7 +1605,8 @@ static int input_dev_resume(struct device *dev)
 {
 	struct input_dev *input_dev = to_input_dev(dev);
 
-	input_reset_device(input_dev);
+	if (!device_may_wakeup(dev))
+		input_reset_device(input_dev);
 
 	return 0;
 }

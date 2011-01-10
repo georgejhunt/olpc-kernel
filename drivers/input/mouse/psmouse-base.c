@@ -1313,8 +1313,11 @@ static int psmouse_switch_protocol(struct psmouse *psmouse,
 {
 	const struct psmouse_protocol *selected_proto;
 	struct input_dev *input_dev = psmouse->dev;
+	struct device *parent = &psmouse->ps2dev.serio->dev;
 
-	input_dev->dev.parent = &psmouse->ps2dev.serio->dev;
+	input_dev->dev.parent = parent;
+
+	device_set_wakeup_capable(&input_dev->dev, device_can_wakeup(parent));
 
 	if (proto && (proto->detect || proto->init)) {
 		psmouse_apply_defaults(psmouse);
@@ -1423,6 +1426,9 @@ static int psmouse_connect(struct serio *serio, struct serio_driver *drv)
 	error = input_register_device(psmouse->dev);
 	if (error)
 		goto err_protocol_disconnect;
+
+	/* FIXME: Hardcode on for OLPC until final design is resolved */
+	device_set_wakeup_enable(&psmouse->dev->dev, true);
 
 	if (parent && parent->pt_activate)
 		parent->pt_activate(parent);
@@ -1721,6 +1727,9 @@ static ssize_t psmouse_attr_set_protocol(struct psmouse *psmouse, void *data, co
 
 		return error;
 	}
+
+	/* FIXME: Hardcode on for OLPC until final design is resolved */
+	device_set_wakeup_enable(&psmouse->dev->dev, true);
 
 	input_unregister_device(old_dev);
 

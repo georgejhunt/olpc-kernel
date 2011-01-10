@@ -550,6 +550,9 @@ static void hgpk_setup_input_device(struct input_dev *input,
 		input->phys = old_input->phys;
 		input->id = old_input->id;
 		input->dev.parent = old_input->dev.parent;
+
+		device_set_wakeup_capable(&input->dev,
+					  device_can_wakeup(&old_input->dev));
 	}
 
 	memset(input->evbit, 0, sizeof(input->evbit));
@@ -857,6 +860,9 @@ static ssize_t attr_set_mode(struct psmouse *psmouse, void *data,
 	err = input_register_device(new_dev);
 	if (err)
 		goto err_try_restore;
+
+	/* FIXME: Hardcode on for OLPC until final design is resolved */
+	device_set_wakeup_enable(&new_dev->dev, true);
 
 	psmouse->dev = new_dev;
 	input_unregister_device(old_dev);

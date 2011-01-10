@@ -154,4 +154,8 @@ static inline void i8042_platform_exit(void)
 }
 #endif /* !CONFIG_PCI */
 
+static inline void i8042_platform_suspend(struct device *dev, bool may_wakeup)
+{
+}
+
 #endif /* _I8042_SPARCIO_H */

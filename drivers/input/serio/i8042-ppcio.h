@@ -52,6 +52,10 @@ static inline void i8042_platform_exit(void)
 {
 }
 
+static inline void i8042_platform_suspend(struct device *dev, bool may_wakeup)
+{
+}
+
 #else
 
 #include "i8042-io.h"

@@ -1027,6 +1027,7 @@ static void atkbd_set_keycode_table(struct atkbd *atkbd)
 static void atkbd_set_device_attrs(struct atkbd *atkbd)
 {
 	struct input_dev *input_dev = atkbd->dev;
+	struct device *parent = &atkbd->ps2dev.serio->dev;
 	int i;
 
 	if (atkbd->extra)
@@ -1047,7 +1048,9 @@ static void atkbd_set_device_attrs(struct atkbd *atkbd)
 	input_dev->id.product = atkbd->translated ? 1 : atkbd->set;
 	input_dev->id.version = atkbd->id;
 	input_dev->event = atkbd_event;
-	input_dev->dev.parent = &atkbd->ps2dev.serio->dev;
+	input_dev->dev.parent = parent;
+
+	device_set_wakeup_capable(&input_dev->dev, device_can_wakeup(parent));
 
 	input_set_drvdata(input_dev, atkbd);
 
@@ -1169,6 +1172,9 @@ static int atkbd_connect(struct serio *serio, struct serio_driver *drv)
 	err = input_register_device(atkbd->dev);
 	if (err)
 		goto fail4;
+
+	/* FIXME: Hardcode on for OLPC until final design is resolved */
+	device_set_wakeup_enable(&atkbd->dev->dev, true);
 
 	return 0;
 
