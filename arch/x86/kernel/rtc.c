@@ -8,6 +8,7 @@
 #include <linux/export.h>
 #include <linux/pnp.h>
 #include <linux/of.h>
+#include <linux/delay.h>
 
 #include <asm/vsyscall.h>
 #include <asm/x86_init.h>
@@ -110,6 +111,25 @@ unsigned long mach_get_cmos_time(void)
 
 	spin_lock_irqsave(&rtc_lock, flags);
 
+	/*
+	 * dev.laptop.org #10757, sometimes the RTC returns zero data
+	 * immediately after a resume, so this code will give it some
+	 * more time by waiting for the 32KHz clock bit to be set, in the
+	 * hope that this means it is ready to be used. quozl@laptop.org
+	 */
+	if (!(CMOS_READ(RTC_FREQ_SELECT) & RTC_REF_CLCK_32KHZ)) {
+		int n = 0;
+		printk(KERN_INFO "rtc is insane, waiting for it\n");
+		while(!(CMOS_READ(RTC_FREQ_SELECT) & RTC_REF_CLCK_32KHZ)) {
+			if (n++ >= 1000)
+				break;
+			udelay(1);
+		}
+		if (CMOS_READ(RTC_FREQ_SELECT) & RTC_REF_CLCK_32KHZ)
+			printk(KERN_INFO "rtc was insane for %dus\n", n);
+		else
+			printk(KERN_INFO "timeout waiting for insane rtc\n");
+	}
 	/*
 	 * If UIP is clear, then we have >= 244 microseconds before
 	 * RTC registers will be updated.  Spec sheet says that this
