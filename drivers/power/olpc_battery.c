@@ -235,7 +235,7 @@ static int olpc_bat_get_charge_full_design(union power_supply_propval *val)
 			val->intval = 2800000;
 			break;
 		case 2: /* BYD */
-			val->intval = 3100000;
+			val->intval = 2800000;
 			break;
 		default:
 			return -EIO;
@@ -267,6 +267,53 @@ static int olpc_bat_get_charge_now(union power_supply_propval *val)
 	return 0;
 }
 
+static int olpc_bat_get_voltage_max_design(union power_supply_propval *val)
+{
+	uint8_t ec_byte;
+	union power_supply_propval tech;
+	int ret, mfr;
+
+	ret = olpc_bat_get_tech(&tech);
+	if (ret)
+		return ret;
+
+	ec_byte = BAT_ADDR_MFR_TYPE;
+	ret = olpc_ec_cmd(EC_BAT_EEPROM, &ec_byte, 1, &ec_byte, 1);
+	if (ret)
+		return ret;
+
+	mfr = ec_byte >> 4;
+
+	switch (tech.intval) {
+	case POWER_SUPPLY_TECHNOLOGY_NiMH:
+		switch (mfr) {
+		case 1: /* Gold Peak */
+			val->intval = 6000000;
+			break;
+		default:
+			return -EIO;
+		}
+		break;
+
+	case POWER_SUPPLY_TECHNOLOGY_LiFe:
+		switch (mfr) {
+		case 1: /* Gold Peak */
+			val->intval = 6400000;
+			break;
+		case 2: /* BYD */
+			val->intval = 6500000;
+			break;
+		default:
+			return -EIO;
+		}
+		break;
+
+	default:
+		return -EIO;
+	}
+
+	return ret;
+}
 /*********************************************************************
  *		Battery properties
  *********************************************************************/
@@ -401,6 +448,11 @@ static int olpc_bat_get_property(struct power_supply *psy,
 		sprintf(bat_serial, "%016llx", (long long)be64_to_cpu(ser_buf));
 		val->strval = bat_serial;
 		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+		ret = olpc_bat_get_voltage_max_design(val);
+		if (ret)
+			return ret;
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -428,6 +480,7 @@ static enum power_supply_property olpc_xo1_bat_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
 };
 
 /* XO-1.5 does not have ambient temperature property */
@@ -449,6 +502,7 @@ static enum power_supply_property olpc_xo15_bat_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
 };
 
 /* EEPROM reading goes completely around the power_supply API, sadly */
