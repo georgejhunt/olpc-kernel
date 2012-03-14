@@ -102,7 +102,7 @@ BuildRequires: unifdef
 BuildConflicts: rhbuildsys(DiskFree) < 500Mb
 
 BuildRequires: dracut, dracut-modules-olpc
-Requires(post): module-init-tools
+Requires(post): coreutils, module-init-tools
 
 Source0: olpc-kernel.tar.bz2
 
