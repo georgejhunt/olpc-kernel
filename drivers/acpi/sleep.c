@@ -204,8 +204,10 @@ static void acpi_pm_finish(void)
 	pwr_btn_event_pending = false;
 	pwr_btn_dev = bus_find_device(&acpi_bus_type, NULL, NULL,
 				      find_powerf_dev);
-	if (pwr_btn_dev)
+	if (pwr_btn_dev) {
 		pm_wakeup_event(pwr_btn_dev, 0);
+		put_device(pwr_btn_dev);
+	}
 }
 
 /**
