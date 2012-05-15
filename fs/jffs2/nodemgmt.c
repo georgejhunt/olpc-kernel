@@ -40,7 +40,7 @@ static int jffs2_rp_can_write(struct jffs2_sb_info *c)
 		return 1;
 
 	/* Always allow root */
-	if (current_fsuid() == 0 || current_fsgid() == 0)
+	if (capable(CAP_SYS_RESOURCE))
 		return 1;
 
 	D1(printk(KERN_DEBUG "forbid writing\n"));
