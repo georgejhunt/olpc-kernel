@@ -48,6 +48,9 @@
 #include "cmd.h"
 #include "if_sdio.h"
 
+static const struct firmware *main_fw;
+static const struct firmware *helper_fw;
+
 static void if_sdio_interrupt(struct sdio_func *func);
 
 /* The if_sdio_remove() callback function is called when
@@ -685,6 +688,9 @@ static void if_sdio_do_prog_firmware(struct lbs_private *priv, int ret,
 		return;
 	}
 
+	helper_fw = helper;
+	main_fw = mainfw;
+
 	ret = if_sdio_prog_helper(card, helper);
 	if (ret)
 		goto out;
@@ -699,10 +705,11 @@ static void if_sdio_do_prog_firmware(struct lbs_private *priv, int ret,
 	if_sdio_finish_power_on(card);
 
 out:
-	if (helper)
-		release_firmware(helper);
-	if (mainfw)
-		release_firmware(mainfw);
+	return;
+	//if (helper)
+	//	release_firmware(helper);
+	//if (mainfw)
+	//	release_firmware(mainfw);
 }
 
 static int if_sdio_prog_firmware(struct if_sdio_card *card)
@@ -750,8 +757,12 @@ static int if_sdio_prog_firmware(struct if_sdio_card *card)
 		return 0;
 	}
 
-	ret = lbs_get_firmware_async(card->priv, &card->func->dev, card->model,
-				     fw_table, if_sdio_do_prog_firmware);
+	if (!helper_fw || !main_fw) {
+		ret = lbs_get_firmware_async(card->priv, &card->func->dev, card->model,
+					     fw_table, if_sdio_do_prog_firmware);
+	} else {
+		if_sdio_do_prog_firmware(card->priv, 0, helper_fw, main_fw);
+	}
 
 out:
 	lbs_deb_leave_args(LBS_DEB_SDIO, "ret %d", ret);
@@ -1416,6 +1427,9 @@ static void __exit if_sdio_exit_module(void)
 	cancel_work_sync(&card_reset_work);
 
 	sdio_unregister_driver(&if_sdio_driver);
+
+	release_firmware(main_fw);
+	release_firmware(helper_fw);
 
 	lbs_deb_leave(LBS_DEB_SDIO);
 }
