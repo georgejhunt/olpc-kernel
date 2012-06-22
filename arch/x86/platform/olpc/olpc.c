@@ -43,7 +43,10 @@ static unsigned char ec_debugfs_resp[EC_MAX_CMD_REPLY];
 static unsigned int ec_debugfs_resp_bytes;
 
 /* EC event mask to be applied during suspend (defining wakeup sources). */
-static u16 ec_wakeup_mask;
+/* we initialize with EC_SCI_SRC_GPWAKE since a) it's harmless, and b)
+ * there's currently no good way to set it otherwise.
+ */
+static u16 ec_wakeup_mask = EC_SCI_SRC_GPWAKE;
 
 /* what the timeout *should* be (in ms) */
 #define EC_BASE_TIMEOUT 20
