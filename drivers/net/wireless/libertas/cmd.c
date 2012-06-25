@@ -1020,12 +1020,10 @@ static void lbs_submit_command(struct lbs_private *priv,
 	if (ret) {
 		netdev_info(priv->dev, "DNLD_CMD: hw_host_to_card failed: %d\n",
 			    ret);
-		/* Let the timer kick in and retry, and potentially reset
-		   the whole thing if the condition persists */
-		timeo = HZ/4;
-	}
-
-	if (command == CMD_802_11_DEEP_SLEEP) {
+		/* Reset dnld state machine, report failure */
+		priv->dnld_sent = DNLD_RES_RECEIVED;
+		lbs_complete_command(priv, cmdnode, ret);
+	} else if (command == CMD_802_11_DEEP_SLEEP) {
 		if (priv->is_auto_deep_sleep_enabled) {
 			priv->wakeup_dev_required = 1;
 			priv->dnld_sent = 0;
