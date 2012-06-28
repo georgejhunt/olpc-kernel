@@ -1288,7 +1288,8 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 	int y;
  	int c = scr_readw((u16 *) vc->vc_pos);
 
-	if (fbcon_is_inactive(vc, info) || vc->vc_deccm != 1)
+	if (fbcon_is_inactive(vc, info) || vc->vc_deccm != 1 ||
+	    ops->blank_state != FB_BLANK_UNBLANK)
 		return;
 
 	if (vc->vc_cursor_type & 0x10)
