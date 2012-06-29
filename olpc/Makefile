@@ -35,4 +35,3 @@ xo_1_5-kernel-rpm:
 xo_1_75-kernel-rpm:
 	@echo "Please run the following command to build an XO-1.75 kernel rpm:"
 	@echo "  ./olpc/buildrpm 1.75"
-
