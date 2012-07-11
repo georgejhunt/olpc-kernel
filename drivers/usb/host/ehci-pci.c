@@ -102,6 +102,11 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 	/* cache this readonly data; minimize chip reads */
 	ehci->hcs_params = ehci_readl(ehci, &ehci->caps->hcs_params);
 
+	/* data structure init */
+	retval = ehci_init(hcd);
+	if (retval)
+		return retval;
+
 	retval = ehci_halt(ehci);
 	if (retval)
 		return retval;
@@ -118,11 +123,6 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 		ehci_info(ehci, "applying AMD SB700/SB800/Hudson-2/3 EHCI "
 				"dummy qh workaround\n");
 	}
-
-	/* data structure init */
-	retval = ehci_init(hcd);
-	if (retval)
-		return retval;
 
 	switch (pdev->vendor) {
 	case PCI_VENDOR_ID_NEC:
