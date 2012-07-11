@@ -409,7 +409,7 @@ static void ehci_iaa_watchdog(unsigned long param)
 	 * (a) SMP races against real IAA firing and retriggering, and
 	 * (b) clean HC shutdown, when IAA watchdog was pending.
 	 */
-	if (ehci->reclaim
+	if (ehci->async_unlink
 			&& !timer_pending(&ehci->iaa_watchdog)
 			&& ehci->rh_state == EHCI_RH_RUNNING) {
 		u32 cmd, status;
@@ -589,8 +589,8 @@ static void ehci_stop (struct usb_hcd *hcd)
 		usb_amd_dev_put();
 
 #ifdef	EHCI_STATS
-	ehci_dbg (ehci, "irq normal %ld err %ld reclaim %ld (lost %ld)\n",
-		ehci->stats.normal, ehci->stats.error, ehci->stats.reclaim,
+	ehci_dbg(ehci, "irq normal %ld err %ld iaa %ld (lost %ld)\n",
+		ehci->stats.normal, ehci->stats.error, ehci->stats.iaa,
 		ehci->stats.lost_iaa);
 	ehci_dbg (ehci, "complete %ld unlink %ld\n",
 		ehci->stats.complete, ehci->stats.unlink);
@@ -657,7 +657,6 @@ static int ehci_init(struct usb_hcd *hcd)
 	else					// N microframes cached
 		ehci->i_thresh = 2 + HCC_ISOC_THRES(hcc_params);
 
-	ehci->reclaim = NULL;
 	ehci->next_uframe = -1;
 	ehci->clock_frame = -1;
 
@@ -899,11 +898,11 @@ static irqreturn_t ehci_irq (struct usb_hcd *hcd)
 		/* guard against (alleged) silicon errata */
 		if (cmd & CMD_IAAD)
 			ehci_dbg(ehci, "IAA with IAAD still set?\n");
-		if (ehci->reclaim) {
-			COUNT(ehci->stats.reclaim);
+		if (ehci->async_unlink) {
+			COUNT(ehci->stats.iaa);
 			end_unlink_async(ehci);
 		} else
-			ehci_dbg(ehci, "IAA with nothing to reclaim?\n");
+			ehci_dbg(ehci, "IAA with nothing unlinked?\n");
 	}
 
 	/* remote wakeup [4.3.1] */
@@ -1030,7 +1029,7 @@ static int ehci_urb_enqueue (
 static void unlink_async (struct ehci_hcd *ehci, struct ehci_qh *qh)
 {
 	/* failfast */
-	if (ehci->rh_state != EHCI_RH_RUNNING && ehci->reclaim)
+	if (ehci->rh_state != EHCI_RH_RUNNING && ehci->async_unlink)
 		end_unlink_async(ehci);
 
 	/* If the QH isn't linked then there's nothing we can do
@@ -1044,15 +1043,15 @@ static void unlink_async (struct ehci_hcd *ehci, struct ehci_qh *qh)
 	}
 
 	/* defer till later if busy */
-	if (ehci->reclaim) {
+	if (ehci->async_unlink) {
 		struct ehci_qh		*last;
 
-		for (last = ehci->reclaim;
-				last->reclaim;
-				last = last->reclaim)
+		for (last = ehci->async_unlink;
+				last->unlink_next;
+				last = last->unlink_next)
 			continue;
 		qh->qh_state = QH_STATE_UNLINK_WAIT;
-		last->reclaim = qh;
+		last->unlink_next = qh;
 
 	/* start IAA cycle */
 	} else
