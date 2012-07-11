@@ -349,6 +349,7 @@ static void ehci_shutdown(struct usb_hcd *hcd)
 	struct ehci_hcd	*ehci = hcd_to_ehci(hcd);
 
 	spin_lock_irq(&ehci->lock);
+	ehci->shutdown = true;
 	ehci->rh_state = EHCI_RH_STOPPING;
 	ehci->enabled_hrtimer_events = 0;
 	spin_unlock_irq(&ehci->lock);
@@ -826,6 +827,7 @@ dead:
 		usb_hc_died(hcd);
 
 		/* Don't let the controller do anything more */
+		ehci->shutdown = true;
 		ehci->rh_state = EHCI_RH_STOPPING;
 		ehci->command &= ~(CMD_RUN | CMD_ASE | CMD_PSE);
 		ehci_writel(ehci, ehci->command, &ehci->regs->command);
