@@ -1336,6 +1336,7 @@ static void if_sdio_remove(struct sdio_func *func)
 		kfree(packet);
 	}
 
+	kfree(card);
 	lbs_deb_leave(LBS_DEB_SDIO);
 }
 
