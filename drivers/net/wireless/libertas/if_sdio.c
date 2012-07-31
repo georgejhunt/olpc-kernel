@@ -121,6 +121,7 @@ struct if_sdio_card {
 	unsigned long		ioport;
 	unsigned int		scratch_reg;
 	bool			started;
+	bool 			resetting;
 	wait_queue_head_t	pwron_waitq;
 
 	u8			buffer[65536] __attribute__((aligned(4)));
@@ -1085,12 +1086,20 @@ static DECLARE_WORK(card_reset_work, if_sdio_reset_card_worker);
 static void if_sdio_reset_card(struct lbs_private *priv)
 {
 	struct if_sdio_card *card = priv->card;
+	unsigned long flags;
+
+	spin_lock_irqsave(&priv->driver_lock, flags);
+	if (card->resetting)
+		goto out;
 
 	if (work_pending(&card_reset_work))
-		return;
+		goto out;
 
 	reset_host = card->func->card->host;
+	card->resetting = true;
 	schedule_work(&card_reset_work);
+out:
+	spin_unlock_irqrestore(&priv->driver_lock, flags);
 }
 
 static int if_sdio_power_save(struct lbs_private *priv)
