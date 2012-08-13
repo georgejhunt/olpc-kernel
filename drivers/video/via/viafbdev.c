@@ -19,6 +19,7 @@
  * 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
+#include <linux/capability.h>
 #include <linux/module.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
@@ -399,6 +400,201 @@ static int viafb_blank(int blank_mode, struct fb_info *info)
 	return 0;
 }
 
+/*
+ * This is a temporary hack to move command queueing into the kernel,
+ * so that we don't suspend halfway through writing a command sequence.
+ * We execute the commands here while in uninterruptible state.
+ * This avoids a hardware hang (#11982, #12027).
+ * The command queuing code is a pretty direct copy of viaFlushPCI_H5 from
+ * the chrome driver.
+ * In future we aim to switch to a KMS driver where this kind of problem
+ * is solved "automatically".
+ */
+#define VIASETREG(reg, v) writel((v), viapar->shared->vdev->engine_mmio + (reg))
+#define VIAGETREG(reg) readl(viapar->shared->vdev->engine_mmio + (reg))
+#define H5_HC_DUMMY					0xCC000000
+#define INV_AGPHeader0			  0xFE000000
+#define INV_AGPHeader1			  0xFE010000
+#define INV_AGPHeader2			  0xFE020000
+#define INV_AGPHeader3			  0xFE030000
+#define INV_AGPHeader4			  0xFE040000
+#define INV_AGPHeader5			  0xFE050000
+#define INV_AGPHeader6			  0xFE060000
+#define INV_AGPHeader7			  0xFE070000
+#define INV_AGPHeader82			 0xFE820000
+#define INV_AGPHeader83			 0xFE830000
+#define INV_AGPHeader_MASK		  0xFFFF0000
+#define INV_REG_CR_TRANS			0x041C
+#define INV_REG_CR_BEGIN			0x0420
+#define INV_REG_CR_END			  0x0438
+#define INV_REG_3D_TRANS			0x043C
+#define INV_REG_3D_BEGIN			0x0440
+#define INV_REG_3D_END			  0x06FC
+static void h6_wait_idle(struct viafb_par *viapar)
+{
+	int loop = 0;
+	mb();
+
+	while ((VIAGETREG(VIA_REG_STATUS) & 
+		   (VIA_CMD_RGTR_BUSY_M1 | VIA_2D_ENG_BUSY_M1 | VIA_3D_ENG_BUSY_M1)) &&
+		   (loop++ < MAXLOOP));
+}
+
+static int queue_cmd(struct fb_info *info, u32 __user *arg)
+{
+	struct viafb_par *viapar = info->par;
+	u32 __user *bp;
+	u32 __user *endp;
+	u32 len;
+	int r;
+
+	/* Root-only, to prevent user programs from being able to send
+	 * nonsense commands. */
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	/* arg corresponds to struct _ViaCommandBuffer from chrome driver */
+	/* dword 1 is the buffer address, dword 3 is the length */
+	r = access_ok(VERIFY_READ, arg, 12);
+	if (!r)
+		return -EIO;
+
+	__get_user(bp, arg + 1);
+	__get_user(len, arg + 3);
+
+	r = access_ok(VERIFY_READ, bp, len);
+	if (!r)
+		return -EIO;
+
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	endp = bp + len;
+
+	while (bp < endp) {
+		u32 dword, dword1, cmdCount, offset, offset1;
+		__get_user(dword, bp);
+
+		if (dword == H5_HC_DUMMY) {
+			bp++;
+			continue;
+		}
+		
+		switch(dword & INV_AGPHeader_MASK)
+		{
+			case INV_AGPHeader0:
+				__get_user(cmdCount, bp + 1);
+				bp += 4;
+				while(cmdCount--) {
+					__get_user(offset, bp++);
+					offset &= 0xFFFF;
+					if(offset == 0) {
+						h6_wait_idle(viapar);
+					}
+					__get_user(dword, bp++);
+					VIASETREG(offset, dword);
+				}
+				break;
+				
+			case INV_AGPHeader1:
+				offset = dword & 0xFFFF;
+				__get_user(cmdCount, bp + 1);
+				bp += 4;
+				while(cmdCount--) {
+					__get_user(dword, bp++);
+					VIASETREG(offset, dword);
+					offset += 4;
+				}
+				break;
+				
+			case INV_AGPHeader2:
+				bp += 2;
+				if (bp >= endp)	 /* skip to the following 32 bits position */
+					break;
+
+				__get_user(dword, bp);
+				VIASETREG(INV_REG_3D_TRANS, dword);
+				bp += 2;
+				
+				while (bp < endp) {
+					__get_user(dword, bp);
+					if  (((dword &INV_AGPHeader_MASK)== INV_AGPHeader0) ||
+						 ((dword & INV_AGPHeader_MASK)== INV_AGPHeader1) ||
+						 ((dword & INV_AGPHeader_MASK)== INV_AGPHeader2) ||
+						 ((dword & INV_AGPHeader_MASK)== INV_AGPHeader3) ||
+						 ((dword & INV_AGPHeader_MASK)== INV_AGPHeader4) ||
+						 ((dword & INV_AGPHeader_MASK) == INV_AGPHeader5) ||
+						 ((dword & INV_AGPHeader_MASK) == INV_AGPHeader6) ||
+						 ((dword & INV_AGPHeader_MASK) == INV_AGPHeader7))
+						break;
+					
+					VIASETREG(INV_REG_3D_BEGIN, dword);
+					bp++;
+				}
+				break;
+				
+			case INV_AGPHeader3:
+				offset = dword & 0xFFFF;
+				offset1 = offset + 4 ;
+				__get_user(cmdCount, bp + 1);
+				bp += 2;
+				__get_user(dword, bp);
+				VIASETREG(offset, dword);
+				bp += 2;
+				while(cmdCount--) {
+					__get_user(dword, bp++);
+					VIASETREG(offset1, dword);
+				}
+				break;
+ 
+			case INV_AGPHeader4:
+				offset = dword & 0xFFFF;
+				__get_user(cmdCount, bp + 1);
+				bp += 4;
+				while(cmdCount--) {
+					__get_user(cmdCount, bp++);
+					VIASETREG(offset, dword);
+				}
+				break;
+
+			case INV_AGPHeader5:
+				__get_user(cmdCount, bp + 1);
+				bp += 4;
+				while(cmdCount--) {
+					__get_user(dword, bp);
+					__get_user(dword1, bp + 1);
+					VIASETREG(dword & 0xFFFF, dword1);
+					bp +=2;
+				}
+				break;
+				
+			case INV_AGPHeader6:
+				/* FIXME. Never reached here, AGP Header 6 is not used */
+				bp++;
+				break;
+				
+			case INV_AGPHeader7:
+				__get_user(cmdCount, bp + 1);
+				bp += 4;
+				while(cmdCount--) {
+					__get_user(dword, bp++);
+					offset = dword & 0xFFFF;
+					__get_user(dword, bp++);
+					VIASETREG(offset, dword);
+				}
+				break;
+  
+			 default:
+				/* FIXME. No regular path treament, for example of dummy commands, 
+				   Just skip to the following 32 bits position */
+				bp++;
+				break;
+		}
+		
+	}
+
+	set_current_state(TASK_RUNNING);
+	return 0;
+}
+
 static int viafb_ioctl(struct fb_info *info, u_int cmd, u_long arg)
 {
 	union {
@@ -418,10 +614,14 @@ static int viafb_ioctl(struct fb_info *info, u_int cmd, u_long arg)
 	u32 gpu32;
 
 	DEBUG_MSG(KERN_INFO "viafb_ioctl: 0x%X !!\n", cmd);
-	printk(KERN_WARNING "viafb_ioctl: Please avoid this interface as it is unstable and might change or vanish at any time!\n");
+	//printk(KERN_WARNING "viafb_ioctl: Please avoid this interface as it is unstable and might change or vanish at any time!\n");
 	memset(&u, 0, sizeof(u));
 
 	switch (cmd) {
+	case VIAFB_QUEUE_CMD:
+		return queue_cmd(info, argp);
+	case VIAFB_QUEUE_CMD_AVAILABLE:
+		return 0;
 	case VIAFB_GET_CHIP_INFO:
 		if (copy_to_user(argp, viaparinfo->chip_info,
 				sizeof(struct chip_information)))
