@@ -24,6 +24,7 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-chip-ident.h>
 #include <media/ov7670.h>
+#include <media/siv120d.h>
 #include <media/videobuf2-vmalloc.h>
 #include <media/videobuf2-dma-contig.h>
 #include <media/videobuf2-dma-sg.h>
@@ -808,7 +809,8 @@ static int mcam_cam_init(struct mcam_camera *cam)
 	if (ret)
 		goto out;
 	cam->sensor_type = chip.ident;
-	if (cam->sensor_type != V4L2_IDENT_OV7670) {
+	if (!(cam->sensor_type == V4L2_IDENT_OV7670 ||
+		cam->sensor_type == V4L2_IDENT_SIV120D)) {
 		cam_err(cam, "Unsupported sensor type 0x%x", cam->sensor_type);
 		ret = -EINVAL;
 		goto out;
@@ -844,12 +846,33 @@ static int mcam_cam_configure(struct mcam_camera *cam)
 
 	v4l2_fill_mbus_format(&mbus_fmt, &cam->pix_format, cam->mbus_code);
 	ret = sensor_call(cam, core, init, 0);
-	if (ret == 0)
-		ret = sensor_call(cam, video, s_mbus_fmt, &mbus_fmt);
-	/*
-	 * OV7670 does weird things if flip is set *before* format...
-	 */
-	ret += mcam_cam_set_flip(cam);
+
+	if (ret == 0) {
+		if (cam->sensor_type == V4L2_IDENT_OV7670)  {
+			/*
+			 * This sleep was added so that the OV760 has time to come up after
+			 * writing to all the registers to initialize. Otherwise a still image
+			 * grabbed immediately comes out dim/gray.
+			 */
+			msleep(800);
+			ret = sensor_call(cam, video, s_mbus_fmt, &mbus_fmt);
+			/*
+			 * OV7670 does weird things if flip is set *before* format...
+			 */
+			ret += mcam_cam_set_flip(cam);
+		}
+		else {
+			/*
+			 * This sleep was added so that the SIV120D has time to come up after
+			 * writing to all the registers to initialize. Otherwise a still image
+			 * grabbed immediately comes out distorted
+			 */
+			if (cam->sensor_type == V4L2_IDENT_SIV120D)
+				msleep(1000);
+			ret = sensor_call(cam, video, s_mbus_fmt, &mbus_fmt);
+		}
+	}
+
 	return ret;
 }
 
@@ -1716,15 +1739,28 @@ static struct ov7670_config sensor_cfg = {
 	.min_height = 240,
 };
 
+static struct siv120d_config siv120d_cfg = {
+	.clock_speed = 24,
+};
 
 int mccic_register(struct mcam_camera *cam)
 {
-	struct i2c_board_info ov7670_info = {
-		.type = "ov7670",
-		.addr = 0x42 >> 1,
-		.platform_data = &sensor_cfg,
+	struct i2c_board_info mcam_info[] = {
+		{
+			.type = "ov7670",
+			.addr = 0x42 >> 1,
+			.platform_data = &sensor_cfg,
+		},
+		{
+			.type = "siv120d",
+			.addr = 0x66 >> 1,
+			.platform_data = &siv120d_cfg,
+		},
 	};
 	int ret;
+	int i;
+	bool sensor_found;
+	struct v4l2_subdev *sensor;
 
 	/*
 	 * Validate the requested buffer mode.
@@ -1757,15 +1793,25 @@ int mccic_register(struct mcam_camera *cam)
 	INIT_LIST_HEAD(&cam->buffers);
 	mcam_ctlr_init(cam);
 
+	/* configs for ov7670 */
+	sensor_cfg.clock_speed = cam->clock_speed;
+	sensor_cfg.use_smbus = cam->use_smbus;
+
 	/*
 	 * Try to find the sensor.
 	 */
-	sensor_cfg.clock_speed = cam->clock_speed;
-	sensor_cfg.use_smbus = cam->use_smbus;
-	cam->sensor_addr = ov7670_info.addr;
-	cam->sensor = v4l2_i2c_new_subdev_board(&cam->v4l2_dev,
-			cam->i2c_adapter, &ov7670_info, NULL);
-	if (cam->sensor == NULL) {
+	sensor_found = 0;
+	for(i=0; i<ARRAY_SIZE(mcam_info); i++)
+	{
+		sensor = v4l2_i2c_new_subdev_board(&cam->v4l2_dev,
+				cam->i2c_adapter, &mcam_info[i], NULL);
+		if (sensor != NULL) {
+			sensor_found = 1;
+			cam->sensor_addr = mcam_info[i].addr;
+			cam->sensor = sensor;
+		}
+	}
+	if (!sensor_found) {
 		ret = -ENODEV;
 		goto out_unregister;
 	}
