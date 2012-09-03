@@ -1142,9 +1142,10 @@ out:
 	return ret;
 }
 
-void lbs_set_mac_control(struct lbs_private *priv)
+int lbs_set_mac_control(struct lbs_private *priv)
 {
 	struct cmd_ds_mac_control cmd;
+	int ret;
 
 	lbs_deb_enter(LBS_DEB_CMD);
 
@@ -1152,9 +1153,10 @@ void lbs_set_mac_control(struct lbs_private *priv)
 	cmd.action = cpu_to_le16(priv->mac_control);
 	cmd.reserved = 0;
 
-	lbs_cmd_async(priv, CMD_MAC_CONTROL, &cmd.hdr, sizeof(cmd));
+	ret = lbs_cmd_with_response(priv, CMD_MAC_CONTROL, &cmd);
 
 	lbs_deb_leave(LBS_DEB_CMD);
+	return ret;
 }
 
 /**
