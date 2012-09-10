@@ -1,68 +1,17 @@
 \ OLPC boot script
 
-[ifndef] do-firmware-update
+[ifdef] require-signatures?
+   : no-signatures  ( -- )  false to require-signatures?  ;
+[else]
+   : is-valid  ( $ $ -- true )  4drop true  r> drop  ;
+   : is-leased  ( -- )  " run" cn-buf place  ;
+   : no-signatures  ( -- )
+      ['] is-valid ['] fw-valid?  >body token!
+      ['] is-valid ['] sha-valid? >body token!
+      ['] false      ['] has-developer-key?  ['] load-from-list    (patch
 
-: do-firmware-update  ( img$ -- )
-
-\ Keep .error from printing an input sream position report
-\ which makes a buffer@<address> show up in the error message
-  ['] noop to show-error
-
-  visible
-
-   tuck flash-buf  swap move   ( len )
-
-   ['] ?image-valid  catch  ?dup  if    ( )
-      visible
-      red-letters
-      ." Bad firmware image file - "  .error
-      ." Continuing with old firmware" cr
-      black-letters
-      exit
-   then
-
-   true to file-loaded?
-
-   d# 12,000 wait-until   \ Wait for EC to notice the battery
-
-   ['] ?enough-power  catch  ?dup  if
-      visible
-      red-letters
-      ." Unsafe to update firmware now - " .error
-      ."  Continuing with old firmware" cr
-      black-letters
-      exit
-   then
-
-   " Updating firmware" ?lease-debug-cr
-
-   ec-indexed-io-off?  if
-      visible
-      ." Restarting to enable SPI FLASH writing."  cr
-      d# 3000 ms
-      ec-ixio-reboot
-      security-failure
-   then
-
-   \ Latch alternate? flag for next startup
-   alternate?  if  [char] A h# 82 cmos!  then
-
-   reflash      \ Should power-off and reboot
-   show-x
-   " Reflash returned, unexpectedly" .security-failure
-;
-
-[then]
-
-[ifndef] ?ofw-reflash
-\ Check for new firmware.
-: ?ofw-reflash  ( -- )
-   " ${DN}${PN}\bootfw.zip" expand$
-   ['] (boot-read) catch  if  2drop exit  then
-   img$  firmware-up-to-date?  if  exit  then
-   img$ do-firmware-update
-;
-
+      ['] is-leased  ['] ?leased             ['] load-from-device  (patch
+   ;
 [then]
 
 : set-path-macros  ( -- )
@@ -77,12 +26,23 @@
    then
 ;
 
+: unsigned-boot  ( -- )
+   no-signatures
+   alternate?  if  " \boot-alt"  else  " \boot"  then  pn-buf place
+   " last:" load-from-list drop
+;
+
 : olpc-fth-boot-me
    set-path-macros
-   ?ofw-reflash
-   \ " extra kernel parameters here" to boot-file
-   " ${DN}${PN}\vmlinuz"    expand$ to boot-device
-   " ${DN}${PN}\initrd.img" expand$ to ramdisk
-   boot
+   " ${DN}${PN}\vmlinuz" expand$ 2dup $file-exists? if
+      to boot-device
+      " ${DN}${PN}\initrd.img" expand$ to ramdisk
+      \ " extra kernel parameters here" to boot-file
+      boot
+   else
+      2drop
+      unsigned-boot
+   then
 ;
+
 olpc-fth-boot-me
