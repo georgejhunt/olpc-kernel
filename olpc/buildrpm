@@ -5,7 +5,17 @@
 # from that build environment (see #10994).
 
 mydir=$(readlink -f $(dirname $0))
-specdir=$mydir/SPECS
+src_specdir=$mydir/SPECS
+
+while getopts "m:s" OPTION; do
+	case $OPTION in
+	m) mock=$OPTARG;;
+	s) source_only=1;;
+	\?) exit 1;;
+esac
+done
+
+shift $((OPTIND-1))
 xo_version=$1
 
 # inherit builddir and rpm_outdir from env for olpc-kernel-builder
@@ -13,11 +23,11 @@ xo_version=$1
 [ -z "$rpm_outdir" ] && rpm_outdir="$mydir/RPMS"
 
 if [ "$xo_version" = "1.0" ]; then
-	rpm_target="i586"
+	rpm_target="i686"
 	xo_version="1"
 	defconfig="xo_1_defconfig"
 elif [ "$xo_version" = "1.5" ]; then
-	rpm_target="i586"
+	rpm_target="i686"
 	xo_version="1.5"
 	defconfig="xo_1.5_defconfig"
 elif [ "$xo_version" = "1.75" ]; then
@@ -38,23 +48,40 @@ patchlevel=${patchlevel#*=}
 extraversion=$(grep "^EXTRAVERSION" Makefile)
 extraversion=${extraversion#*=}
 extraversion=${extraversion/-/_}
+extraversion=${extraversion:-%{nil}}
 head=$(git log -n1 --pretty=format:%h)
+
+defines="
+%define patchlevel $patchlevel
+%define sublevel $sublevel
+%define extraversion $extraversion
+%define head $head
+%define xoversion $xo_version
+%define defconfig $defconfig"
+
+specdir=$(mktemp -d)
+trap "rm -rf $specdir" EXIT
+spec=${specdir}/kernel.spec
+echo "$defines" > $spec
+cat ${src_specdir}/kernel.spec >> $spec
+
+rpmbuild_args="--target=$rpm_target --define \"_builddir $builddir\"
+        --define \"_rpmdir $rpm_outdir\" --define \"_sourcedir $mydir/SOURCES\"
+        --define \"_specdir $specdir\" --define \"_srcrpmdir $rpm_outdir\""
 
 make olpc-tarball
 mkdir -p $builddir $rpm_outdir
-rpmbuild -ba $specdir/kernel.spec \
-        --target=$rpm_target \
-        --define "patchlevel $patchlevel" \
-        --define "sublevel $sublevel" \
-        --define "extraversion $extraversion" \
-        --define "_builddir $builddir" \
-        --define "_rpmdir $rpm_outdir" \
-        --define "_sourcedir $mydir/SOURCES" \
-        --define "_specdir $specdir" \
-        --define "_srcrpmdir $rpm_outdir" \
-        --define "head $head" \
-        --define "olpc 1" \
-        --define "dist olpc" \
-        --define "xoversion $xo_version" \
-        --define "defconfig $defconfig"
+eval rpmbuild -bs ${specdir}/kernel.spec $rpmbuild_args
+retcode=$?
+[ $retcode != 0 ] && exit $retcode
 
+[ -n "$source_only" ] && exit 0
+
+if [ -z "$mock" ]; then
+	eval exec rpmbuild -bb $specdir/kernel.spec $rpmbuild_args
+else
+	# Assume SRPM is the most recent in the dir
+	srpm=$(ls --sort=time ${rpm_outdir}/*.src.rpm | head -n 1)
+	rm -f ${rpm_outdir}/{build,root,state}.log
+	exec mock -r "$mock" --resultdir "$rpm_outdir" "$srpm"
+fi

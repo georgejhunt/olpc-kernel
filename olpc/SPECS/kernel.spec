@@ -15,7 +15,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define flavor _xo%{xoversion}
 %define kversion 3.%{patchlevel}.%{sublevel}%{?extraversion}
 %define rpmversion 3.%{patchlevel}.%{sublevel}%{?extraversion}%{flavor}
-%define release %(date "+%Y%m%d.%H%M").%{?dist}.%{?head}
+%define release %(date "+%Y%m%d.%H%M").olpc.%{?head}
 %define image_install_path boot
 
 %define KVERREL %{version}-%{release}
@@ -64,16 +64,14 @@ Summary: The Linux kernel (the core of the Linux operating system)
 #
 # Packages that need to be installed before the kernel is, because the %post
 # scripts use them.
-#
-# FIXME: kernel-firmware req should be kernel-firmware >= %{rpmversion}-%{release} instead of linux-firmware
-%define kernel_prereq  fileutils, module-init-tools, initscripts >= 8.11.1-1, linux-firmware
+%define kernel_prereq  fileutils, module-init-tools, initscripts >= 8.11.1-1, hostname
 
 Name: kernel
 Group: System Environment/Kernel
 License: GPLv2
 Version: %{rpmversion}
 Release: %{release}
-ExclusiveArch: i386 i586 armv7l
+ExclusiveArch: i386 i586 i686 armv7l
 ExclusiveOS: Linux
 Provides: kernel = %{version}
 Provides: kernel-drm = 4.3.0
