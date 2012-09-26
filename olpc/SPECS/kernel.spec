@@ -85,13 +85,7 @@ Conflicts: %{package_conflicts}
 AutoReq: no
 AutoProv: yes
 
-%if "%{xoversion}" == "1"
-Requires: libertas-usb8388-firmware
-BuildRequires: libertas-usb8388-firmware
-%else
-Requires: libertas-sd8686-firmware
-BuildRequires: libertas-sd8686-firmware
-%endif
+BuildRequires: libertas-usb8388-olpc-firmware libertas-sd8686-firmware libertas-sd8787-firmware
 
 BuildRequires: module-init-tools, patch >= 2.5.4, bash >= 2.03, sh-utils, tar
 BuildRequires: bzip2, findutils, gzip, m4, perl, make >= 3.78, diffutils
@@ -260,6 +254,20 @@ BuildKernel() {
     rm -f modnames
 
 %if "%{buildinitramfs}" == "1"
+	export OLPC_WIFI_FW_SELECT=1
+
+case %{xoversion} in
+	1)
+		export OLPC_WIFI_FW_8388=1 ;;
+	1.5)
+		export OLPC_WIFI_FW_8686=1 ;;
+	1.75)
+		export OLPC_WIFI_FW_8686=1 ;;
+	4)
+		export OLPC_WIFI_FW_8686=1
+		export OLPC_WIFI_FW_8787=1 ;;
+esac
+
     /sbin/dracut --conf /etc/dracut-olpc-runrd.conf --force --kmoddir $RPM_BUILD_ROOT/lib/modules/$KernelVer/ $RPM_BUILD_ROOT/boot/initrd-%{KVERREL}.img %{KVERREL} || exit $?
     /sbin/dracut --conf /etc/dracut-olpc-actrd.conf --force --kmoddir $RPM_BUILD_ROOT/lib/modules/$KernelVer/ $RPM_BUILD_ROOT/boot/actrd-%{KVERREL}.img %{KVERREL} || exit $?
 %endif
