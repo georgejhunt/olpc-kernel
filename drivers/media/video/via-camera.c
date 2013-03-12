@@ -19,6 +19,7 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-chip-ident.h>
 #include <media/ov7670.h>
+#include <media/siv120d.h>
 #include <media/videobuf-dma-sg.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -1348,20 +1349,33 @@ static __devinit bool viacam_serial_is_enabled(void)
 	return false;
 }
 
-static struct ov7670_config sensor_cfg = {
+static struct ov7670_config ov7670_cfg = {
 	/* The XO-1.5 (only known user) clocks the camera at 90MHz. */
 	.clock_speed = 90,
+};
+
+static struct siv120d_config siv120d_cfg = {
+	/* But the siv120d developer states that the XO-1.5 clock is 48MHz. Hmm. */
+	.clock_speed = 48,
 };
 
 static __devinit int viacam_probe(struct platform_device *pdev)
 {
 	int ret;
+	int i;
 	struct i2c_adapter *sensor_adapter;
 	struct viafb_dev *viadev = pdev->dev.platform_data;
-	struct i2c_board_info ov7670_info = {
-		.type = "ov7670",
-		.addr = 0x42 >> 1,
-		.platform_data = &sensor_cfg,
+	struct i2c_board_info cam_info[] = {
+		{
+			.type = "ov7670",
+			.addr = 0x42 >> 1,
+			.platform_data = &ov7670_cfg,
+		},
+		{
+			.type = "siv120d",
+			.addr = 0x66 >> 1,
+			.platform_data = &siv120d_cfg,
+		}
 	};
 
 	/*
@@ -1444,8 +1458,12 @@ static __devinit int viacam_probe(struct platform_device *pdev)
 	 * is OLPC-specific.  0x42 assumption is ov7670-specific.
 	 */
 	sensor_adapter = viafb_find_i2c_adapter(VIA_PORT_31);
-	cam->sensor = v4l2_i2c_new_subdev_board(&cam->v4l2_dev, sensor_adapter,
-			&ov7670_info, NULL);
+	for (i = 0; i < ARRAY_SIZE(cam_info); i++) {
+		cam->sensor = v4l2_i2c_new_subdev_board(&cam->v4l2_dev, sensor_adapter,
+				&cam_info[i], NULL);
+		if (cam->sensor)
+			break;
+	}
 	if (cam->sensor == NULL) {
 		dev_err(&pdev->dev, "Unable to find the sensor!\n");
 		ret = -ENODEV;
