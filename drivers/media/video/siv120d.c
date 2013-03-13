@@ -479,12 +479,46 @@ struct siv120d_info {
 	struct mutex reg_mutex;		/* Mutex for accessing registers */
 	u8 bank;			/* Current register bank */
 	u8 mclkdiv;			/* Master pixel clock divider */
-	/* bool use_smbus; */
+	bool use_smbus; /* Use smbus I/O instead of I2C */
 };
 
 static inline struct siv120d_info *to_state(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct siv120d_info, sd);
+}
+
+/* We provide communication via both SMBUS (for XO-1) and I2C (for XO-1.5
+ * and newer) APIs. There is no significant electrical difference between
+ * these interfaces, the key factor is that XO-1 cannot send individual
+ * I2C commands, it instead operates only in terms of SMbus-protocol-level
+ * register writes/reads.
+ *
+ * FIXME: we can probably simplify this. It looks like the i2c read/write
+ * functions below just use the smbus protocol. And if a linux i2c host
+ * adapter does not support smbus directly, it will be emulated via the
+ * same i2c commands we use below. So we could only provide the smbus
+ * functions below and things should work as they do currently, on all
+ * platforms.
+ */
+static int siv120d_read_smbus(struct v4l2_subdev *sd, unsigned char reg,
+		unsigned char *value)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	int ret;
+
+	ret = i2c_smbus_read_byte_data(client, reg);
+	if (ret >= 0) {
+		*value = (unsigned char)ret;
+		ret = 0;
+	}
+	return ret;
+}
+
+static int siv120d_write_smbus(struct v4l2_subdev *sd, unsigned char reg,
+		unsigned char value)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	return i2c_smbus_write_byte_data(client, reg, value);
 }
 
 static int siv120d_read_i2c(struct v4l2_subdev *sd, unsigned char reg,
@@ -548,7 +582,10 @@ static inline int siv120d_switch_bank(struct v4l2_subdev *sd, u8 bank)
 		return 0;
 
 	info->bank = bank;
-	return siv120d_write_i2c(sd, REG_BLK_SEL, bank);
+	if (info->use_smbus)
+		return siv120d_write_smbus(sd, REG_BLK_SEL, bank);
+	else
+		return siv120d_write_i2c(sd, REG_BLK_SEL, bank);
 }
 
 static int siv120d_write_register(struct v4l2_subdev *sd, u16 reg, u8 value)
@@ -562,7 +599,10 @@ static int siv120d_write_register(struct v4l2_subdev *sd, u16 reg, u8 value)
 	if (ret < 0)
 		goto out;
 
-	ret = siv120d_write_i2c(sd, g_reg(reg), value);
+	if (info->use_smbus)
+		ret = siv120d_write_smbus(sd, g_reg(reg), value);
+	else
+		ret = siv120d_write_i2c(sd, g_reg(reg), value);
 
 out:
 	mutex_unlock(&info->reg_mutex);
@@ -580,7 +620,10 @@ static int siv120d_read_register(struct v4l2_subdev *sd, u16 reg, u8 *value)
 	if (ret < 0)
 		goto out;
 
-	ret = siv120d_read_i2c(sd, g_reg(reg), value);
+	if (info->use_smbus)
+		ret = siv120d_read_smbus(sd, g_reg(reg), value);
+	else
+		ret = siv120d_read_i2c(sd, g_reg(reg), value);
 
 out:
 	mutex_unlock(&info->reg_mutex);
@@ -1429,6 +1472,7 @@ static int siv120d_probe(struct i2c_client *client,
 
 		info->min_width = config->min_width;
 		info->min_height = config->min_height;
+		info->use_smbus = config->use_smbus;
 
 		if(config->clock_speed) {
 			/* Override clock divider setting */
@@ -1447,7 +1491,6 @@ static int siv120d_probe(struct i2c_client *client,
 					config->clock_speed);
 			}
 		}
-		/* TODO: support smbus	info->use_smbus = config->use_smbus; */
 	}
 
 	info->fmt = &siv120d_formats[0];

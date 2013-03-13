@@ -21,6 +21,7 @@ struct siv120d_config {
 	int min_width;			/* Filter out smaller sizes */
 	int min_height;			/* Filter out smaller sizes */
 	int clock_speed;		/* External clock speed (MHz) */
+	bool use_smbus;			/* Use smbus I/O instead of I2C */
 };
 
 #define	g_bank(r)	((u8)(r >> 8))

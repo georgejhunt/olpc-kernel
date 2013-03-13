@@ -1797,6 +1797,9 @@ int mccic_register(struct mcam_camera *cam)
 	sensor_cfg.clock_speed = cam->clock_speed;
 	sensor_cfg.use_smbus = cam->use_smbus;
 
+	/* configs for siv120d */
+	siv120d_cfg.use_smbus = cam->use_smbus;
+
 	/*
 	 * Try to find the sensor.
 	 */
