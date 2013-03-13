@@ -65,6 +65,7 @@ enum viacam_opstate { S_IDLE = 0, S_RUNNING = 1 };
 struct via_camera {
 	struct v4l2_device v4l2_dev;
 	struct video_device vdev;
+	u32 sensor_type;
 	struct v4l2_subdev *sensor;
 	struct platform_device *platdev;
 	struct viafb_dev *viadev;
@@ -498,10 +499,25 @@ static void viacam_ctlr_image(struct via_camera *cam)
 	 */
 	viacam_write_reg(cam, VCR_CAPINTC, ~(VCR_CI_ENABLE|VCR_CI_CLKEN));
 	/*
-	 * Set up the controller for VGA resolution, modulo magic
-	 * offsets from the via sample driver.
+	 * Set up the controller for VGA resolution.
 	 */
-	viacam_write_reg(cam, VCR_HORRANGE, 0x06200120);
+
+	if (cam->sensor_type == V4L2_IDENT_SIV120D) {
+		/* Value determined experimentally, to make the image fit perfectly
+		 * inside the bounding box. */
+		viacam_write_reg(cam, VCR_HORRANGE, 0x06400140);
+	} else {
+		/* Magic number from via sample driver. */
+		viacam_write_reg(cam, VCR_HORRANGE, 0x06200120);
+	}
+
+	/* FIXME: Another magic number from via sample driver.
+	 * However, this specifies that the vertical range starts at line 0
+	 * and ends at line 478. That is one short from our vertical resolution
+	 * of 480 lines. This explains why a green line is visible at the bottom
+	 * of the captured image. This line gets fatter if you decrease the value
+	 * further. The strange thing is that increasing the value causes image
+	 * capture to fail altogether. */
 	viacam_write_reg(cam, VCR_VERTRANGE, 0x01de0000);
 	viacam_set_scale(cam);
 	/*
@@ -1363,6 +1379,7 @@ static __devinit int viacam_probe(struct platform_device *pdev)
 {
 	int ret;
 	int i;
+	struct v4l2_dbg_chip_ident chip;
 	struct i2c_adapter *sensor_adapter;
 	struct viafb_dev *viadev = pdev->dev.platform_data;
 	struct i2c_board_info cam_info[] = {
@@ -1469,6 +1486,15 @@ static __devinit int viacam_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto out_power_down;
 	}
+
+	chip.ident = V4L2_IDENT_NONE;
+	chip.match.type = V4L2_CHIP_MATCH_I2C_ADDR;
+	chip.match.addr = cam_info[i].addr;
+	ret = sensor_call(cam, core, g_chip_ident, &chip);
+	if (ret)
+		goto out_power_down;
+	cam->sensor_type = chip.ident;
+
 	/*
 	 * Get the IRQ.
 	 */
