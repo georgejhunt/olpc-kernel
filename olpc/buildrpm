@@ -56,6 +56,7 @@ extraversion=${extraversion/-/_}
 extraversion=${extraversion:-'%{nil}'}
 head=$(git log -n1 --pretty=format:%h)
 tarball=$sources/olpc-kernel-$head.tar.bz2
+timestamp=$(date "+%Y%m%d.%H%M")
 
 mkdir -p $sources
 if ! [ -e "$tarball" ]; then
@@ -64,6 +65,7 @@ if ! [ -e "$tarball" ]; then
 fi
 
 defines="
+%define timestamp $timestamp
 %define patchlevel $patchlevel
 %define sublevel $sublevel
 %define extraversion $extraversion
