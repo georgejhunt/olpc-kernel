@@ -320,15 +320,36 @@ depmod -a %{KVERREL} || exit $?
 /sbin/dracut --conf /etc/dracut-olpc-runrd.conf --force /boot/initrd-%{KVERREL}.img %{KVERREL} || exit $?
 /sbin/dracut --conf /etc/dracut-olpc-actrd.conf --force /boot/actrd-%{KVERREL}.img %{KVERREL} || exit $?
 %endif
-if [ -f /boot/vmlinuz-%{KVERREL} ]; then
-	(cd /boot && ln -sf vmlinuz-%{KVERREL} vmlinuz)
-fi
-if [ -f /boot/initrd-%{KVERREL}.img ]; then
-	(cd /boot && ln -sf initrd-%{KVERREL}.img initrd.img)
-fi
-if [ -f /boot/actrd-%{KVERREL}.img ]; then
-	(cd /boot && ln -sf actrd-%{KVERREL}.img actrd.img)
-fi
+
+# if running live on XO hardware, we also want to install the kernel to
+# the boot partition. We detect this case by the simple presence of the
+# directory structure.
+DuplicateInstall()
+{
+	local tgt=$1
+	[ -d "$tgt" ] || return 0
+	[ -f /boot/olpc.fth ] && cp -a /boot/olpc.fth $tgt
+	[ -f /boot/vmlinuz-%{KVERREL} ] && cp -a /boot/vmlinuz-%{KVERREL} $tgt
+	[ -f /boot/initrd-%{KVERREL}.img ] && cp -a /boot/initrd-%{KVERREL}.img $tgt
+	[ -f /boot/actrd-%{KVERREL}.img ] && cp -a /boot/actrd-%{KVERREL}.img $tgt
+}
+
+DuplicateInstall /bootpart/boot
+DuplicateInstall /versions/boot/current/boot
+
+UpdateSymlinks()
+{
+	local tgt=$1
+	[ -d "$tgt" ] || return 0
+	[ -f /boot/vmlinuz-%{KVERREL} ] && ln -sf vmlinuz-%{KVERREL} $tgt/vmlinuz
+	[ -f /boot/initrd-%{KVERREL}.img ] && ln -sf initrd-%{KVERREL}.img $tgt/initrd.img
+	[ -f /boot/actrd-%{KVERREL}.img ] && ln -sf actrd-%{KVERREL}.img $tgt/actrd.img
+}
+
+UpdateSymlinks /boot
+UpdateSymlinks /bootpart/boot
+UpdateSymlinks /versions/boot/current/boot
+
 
 %post devel
 if [ -f /etc/sysconfig/kernel ]
@@ -340,6 +361,17 @@ if [ "$HARDLINK" != "no" -a -x /usr/sbin/hardlink ] ; then
   /usr/bin/find . -type f | while read f; do hardlink -c /usr/src/kernels/*FC*/$f $f ; done
   popd > /dev/null
 fi
+
+
+%postun
+# If running on XO, perform the equivalent uninstall from the boot partition.
+DuplicateUninstall()
+{
+	local tgt=$1
+	rm -f $tgt/vmlinuz-%{KVERREL} $tgt/initrd-%{KVERREL}.img $tgt/actrd-%{KVERREL}.img
+}
+DuplicateUninstall /bootpart/boot
+DuplicateUninstall /versions/boot/current/boot
 
 
 %files
