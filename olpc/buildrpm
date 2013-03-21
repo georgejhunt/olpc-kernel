@@ -6,6 +6,7 @@
 
 mydir=$(readlink -f $(dirname $0))
 src_specdir=$mydir/SPECS
+sources=$mydir/SOURCES
 
 while getopts "m:s" OPTION; do
 	case $OPTION in
@@ -34,6 +35,10 @@ elif [ "$xo_version" = "1.75" ]; then
 	rpm_target="armv7l"
 	xo_version="1.75"
 	defconfig="xo_1.75_defconfig"
+elif [ "$xo_version" = "4" ]; then
+	rpm_target="armv7l"
+	xo_version="4"
+	defconfig="xo_4_defconfig"
 else
 	echo "Usage: $0 <laptop_model>"
 	echo "Available models: 1.0 1.5 1.75"
@@ -48,8 +53,15 @@ patchlevel=${patchlevel#*=}
 extraversion=$(grep "^EXTRAVERSION" Makefile)
 extraversion=${extraversion#*=}
 extraversion=${extraversion/-/_}
-extraversion=${extraversion:-%{nil}}
+extraversion=${extraversion:-'%{nil}'}
 head=$(git log -n1 --pretty=format:%h)
+tarball=$sources/olpc-kernel-$head.tar.bz2
+
+mkdir -p $sources
+if ! [ -e "$tarball" ]; then
+	find $sources -type f -name 'olpc-*.tar.bz2' -delete
+	git archive --format=tar --prefix=olpc-kernel/ HEAD | bzip2 > $tarball
+fi
 
 defines="
 %define patchlevel $patchlevel
@@ -66,10 +78,9 @@ echo "$defines" > $spec
 cat ${src_specdir}/kernel.spec >> $spec
 
 rpmbuild_args="--target=$rpm_target --define \"_builddir $builddir\"
-        --define \"_rpmdir $rpm_outdir\" --define \"_sourcedir $mydir/SOURCES\"
+        --define \"_rpmdir $rpm_outdir\" --define \"_sourcedir $sources\"
         --define \"_specdir $specdir\" --define \"_srcrpmdir $rpm_outdir\""
 
-make olpc-tarball
 mkdir -p $builddir $rpm_outdir
 eval rpmbuild -bs ${specdir}/kernel.spec $rpmbuild_args
 retcode=$?

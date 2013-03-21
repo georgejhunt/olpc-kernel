@@ -23,7 +23,6 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define asmarch %_target_cpu
 
 %ifarch %{ix86}
-%define image_install_path boot
 %define hdrarch i386
 %define asmarch x86
 %define _arch x86
@@ -32,6 +31,8 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %endif
 
 %ifarch %{arm}
+%define asmarch arm
+%define hdrarch arm
 %define _arch arm
 %define make_target zImage
 %define kernel_image arch/arm/boot/zImage
@@ -71,7 +72,6 @@ Group: System Environment/Kernel
 License: GPLv2
 Version: %{rpmversion}
 Release: %{release}
-ExclusiveArch: i386 i586 i686 armv7l
 ExclusiveOS: Linux
 Provides: kernel = %{version}
 Provides: kernel-drm = 4.3.0
@@ -96,7 +96,7 @@ BuildConflicts: rhbuildsys(DiskFree) < 500Mb
 BuildRequires: dracut, dracut-modules-olpc
 Requires(post): coreutils, module-init-tools
 
-Source0: olpc-kernel.tar.bz2
+Source0: olpc-kernel-%{head}.tar.bz2
 
 Source10: COPYING.modules
 
@@ -149,8 +149,7 @@ operate.
 
 
 %prep
-%setup -q -n %{name}-%{version} -c
-cd olpc-kernel
+%setup -q -n olpc-kernel
 cp %{SOURCE10} Documentation/
 
 # make sure the kernel has the sublevel we know it has. 
@@ -285,13 +284,10 @@ esac
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/boot
 
-cd olpc-kernel
 BuildKernel %make_target %kernel_image
 
 
 %install
-cd olpc-kernel
-
 # Install kernel headers
 make ARCH=%{hdrarch} INSTALL_HDR_PATH=$RPM_BUILD_ROOT/usr headers_install
 
@@ -385,3 +381,4 @@ fi
 %endif
 
 %changelog
+
