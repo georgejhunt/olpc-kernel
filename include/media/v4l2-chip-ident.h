@@ -83,6 +83,7 @@ enum {
 
         /* module siv120d: reserved range 310-319 */
         V4L2_IDENT_SIV120D = 310,
+        V4L2_IDENT_SIV121C = 311,
 
 	/* Conexant MPEG encoder/decoders: reserved range 400-420 */
 	V4L2_IDENT_CX23418_843 = 403, /* Integrated A/V Decoder on the '418 */
