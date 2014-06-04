@@ -547,6 +547,13 @@ config VIDEO_AS3645A
 	  This is a driver for the AS3645A and LM3555 flash controllers. It has
 	  build in control for flash, torch and indicator LEDs.
 
+config VIDEO_SIV121C
+	tristate "SETi SIV121C sensor support"
+	depends on I2C && VIDEO_V4L2
+	---help---
+	  This is a Video4Linux2 sensor-level driver for the SETi SIV121C
+	  VGA camera.
+
 comment "Video improvement chips"
 
 config VIDEO_UPD64031A
