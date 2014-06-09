@@ -20,6 +20,7 @@
 #include <media/v4l2-chip-ident.h>
 #include <media/ov7670.h>
 #include <media/siv120d.h>
+#include <media/siv121c.h>
 #include <media/videobuf-dma-sg.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -502,7 +503,8 @@ static void viacam_ctlr_image(struct via_camera *cam)
 	 * Set up the controller for VGA resolution.
 	 */
 
-	if (cam->sensor_type == V4L2_IDENT_SIV120D) {
+	if (cam->sensor_type == V4L2_IDENT_SIV120D ||
+	    cam->sensor_type == V4L2_IDENT_SIV121C ) {
 		/* Value determined experimentally, to make the image fit perfectly
 		 * inside the bounding box. */
 		viacam_write_reg(cam, VCR_HORRANGE, 0x06400140);
@@ -1375,6 +1377,10 @@ static struct siv120d_config siv120d_cfg = {
 	.clock_speed = 48,
 };
 
+static struct siv120d_config siv121c_cfg = {
+	.clock_speed = 48,
+};
+
 static __devinit int viacam_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -1392,6 +1398,11 @@ static __devinit int viacam_probe(struct platform_device *pdev)
 			.type = "siv120d",
 			.addr = 0x66 >> 1,
 			.platform_data = &siv120d_cfg,
+		}
+		{
+			.type = "siv121c",
+			.addr = 0x66 >> 1,
+			.platform_data = &siv121c_cfg,
 		}
 	};
 
