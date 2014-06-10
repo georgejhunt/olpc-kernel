@@ -1377,7 +1377,7 @@ static struct siv120d_config siv120d_cfg = {
 	.clock_speed = 48,
 };
 
-static struct siv120d_config siv121c_cfg = {
+static struct siv121c_config siv121c_cfg = {
 	.clock_speed = 48,
 };
 
@@ -1398,7 +1398,7 @@ static __devinit int viacam_probe(struct platform_device *pdev)
 			.type = "siv120d",
 			.addr = 0x66 >> 1,
 			.platform_data = &siv120d_cfg,
-		}
+		},
 		{
 			.type = "siv121c",
 			.addr = 0x66 >> 1,
