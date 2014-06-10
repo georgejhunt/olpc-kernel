@@ -359,12 +359,46 @@ struct siv121c_info {
 	struct mutex reg_mutex;		/* Mutex for accessing registers */
 	u8 bank;			/* Current register bank */
 	u8 mclkdiv;			/* Master pixel clock divider */
-	/* bool use_smbus; */
+	bool use_smbus; /* Use smbus I/O instead of I2C */
 };
 
 static inline struct siv121c_info *to_state(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct siv121c_info, sd);
+}
+
+/* We provide communication via both SMBUS (for XO-1) and I2C (for XO-1.5
+ * and newer) APIs. There is no significant electrical difference between
+ * these interfaces, the key factor is that XO-1 cannot send individual
+ * I2C commands, it instead operates only in terms of SMbus-protocol-level
+ * register writes/reads.
+ *
+ * FIXME: we can probably simplify this. It looks like the i2c read/write
+ * functions below just use the smbus protocol. And if a linux i2c host
+ * adapter does not support smbus directly, it will be emulated via the
+ * same i2c commands we use below. So we could only provide the smbus
+ * functions below and things should work as they do currently, on all
+ * platforms.
+ */
+static int siv121c_read_smbus(struct v4l2_subdev *sd, unsigned char reg,
+		unsigned char *value)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	int ret;
+
+	ret = i2c_smbus_read_byte_data(client, reg);
+	if (ret >= 0) {
+		*value = (unsigned char)ret;
+		ret = 0;
+	}
+	return ret;
+}
+
+static int siv121c_write_smbus(struct v4l2_subdev *sd, unsigned char reg,
+		unsigned char value)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	return i2c_smbus_write_byte_data(client, reg, value);
 }
 
 static int siv121c_read_i2c(struct v4l2_subdev *sd, unsigned char reg,
@@ -428,7 +462,10 @@ static inline int siv121c_switch_bank(struct v4l2_subdev *sd, u8 bank)
 		return 0;
 
 	info->bank = bank;
-	return siv121c_write_i2c(sd, REG_BLK_SEL, bank);
+	if (info->use_smbus)
+		return siv121c_write_smbus(sd, REG_BLK_SEL, bank);
+	else
+		return siv121c_write_i2c(sd, REG_BLK_SEL, bank);
 }
 
 static int siv121c_write_register(struct v4l2_subdev *sd, u16 reg, u8 value)
@@ -442,7 +479,10 @@ static int siv121c_write_register(struct v4l2_subdev *sd, u16 reg, u8 value)
 	if (ret < 0)
 		goto out;
 
-	ret = siv121c_write_i2c(sd, g_reg(reg), value);
+	if (info->use_smbus)
+		ret = siv121c_write_smbus(sd, g_reg(reg), value);
+	else
+		ret = siv121c_write_i2c(sd, g_reg(reg), value);
 
 out:
 	mutex_unlock(&info->reg_mutex);
@@ -460,7 +500,10 @@ static int siv121c_read_register(struct v4l2_subdev *sd, u16 reg, u8 *value)
 	if (ret < 0)
 		goto out;
 
-	ret = siv121c_read_i2c(sd, g_reg(reg), value);
+	if (info->use_smbus)
+		ret = siv121c_read_smbus(sd, g_reg(reg), value);
+	else
+		ret = siv121c_read_i2c(sd, g_reg(reg), value);
 
 out:
 	mutex_unlock(&info->reg_mutex);
@@ -1233,6 +1276,7 @@ static int siv121c_probe(struct i2c_client *client,
 
 		info->min_width = config->min_width;
 		info->min_height = config->min_height;
+		info->use_smbus = config->use_smbus;
 
 		if(config->clock_speed) {
 			/* Override clock divider setting */
@@ -1251,7 +1295,6 @@ static int siv121c_probe(struct i2c_client *client,
 					config->clock_speed);
 			}
 		}
-		/* TODO: support smbus	info->use_smbus = config->use_smbus; */
 	}
 
 	info->fmt = &siv121c_formats[0];
@@ -1262,16 +1305,15 @@ static int siv121c_probe(struct i2c_client *client,
 	info->frame_rate = &siv121c_frame_rates[0];
 	info->wsize = &siv121c_win_sizes[0];
 
-	if (!client->dev.of_node) {
-		/* If we weren't probed from the DT, make sure it's an siv121c */
-		ret = siv121c_detect(sd);
-		if (ret) {
-			v4l_dbg(1, debug, client,
-				"chip found @ 0x%x (%s) is not a siv121c.\n",
-				client->addr << 1, client->adapter->name);
-			kfree(info);
-			return ret;
-		}
+	/* Make sure it's an siv121c */
+	ret = siv121c_detect(sd);
+	if (ret) {
+		v4l_dbg(1, debug, client,
+			"chip found @ 0x%x (%s) is not a siv121c.\n",
+			client->addr << 1, client->adapter->name);
+		v4l2_device_unregister_subdev(sd);
+		kfree(info);
+		return ret;
 	}
 	v4l_info(client, "chip found @ 0x%02x (%s)\n",
 			client->addr << 1, client->adapter->name);
@@ -1294,17 +1336,10 @@ static const struct i2c_device_id siv121c_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, siv121c_id);
 
-static const struct of_device_id siv121c_dt_ids[] = {
-	{ .compatible = "seti,siv121c", },
-	{ /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, siv121c_dt_ids);
-
 static struct i2c_driver siv121c_driver = {
 	.driver = {
 		.owner	= THIS_MODULE,
 		.name	= "siv121c",
-		.of_match_table = siv121c_dt_ids,
 	},
 	.probe		= siv121c_probe,
 	.remove		= siv121c_remove,

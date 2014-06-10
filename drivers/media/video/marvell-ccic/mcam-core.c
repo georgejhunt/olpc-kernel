@@ -25,6 +25,7 @@
 #include <media/v4l2-chip-ident.h>
 #include <media/ov7670.h>
 #include <media/siv120d.h>
+#include <media/siv121c.h>
 #include <media/videobuf2-vmalloc.h>
 #include <media/videobuf2-dma-contig.h>
 #include <media/videobuf2-dma-sg.h>
@@ -810,7 +811,8 @@ static int mcam_cam_init(struct mcam_camera *cam)
 		goto out;
 	cam->sensor_type = chip.ident;
 	if (!(cam->sensor_type == V4L2_IDENT_OV7670 ||
-		cam->sensor_type == V4L2_IDENT_SIV120D)) {
+		cam->sensor_type == V4L2_IDENT_SIV120D ||
+		cam->sensor_type == V4L2_IDENT_SIV121C)) {
 		cam_err(cam, "Unsupported sensor type 0x%x", cam->sensor_type);
 		ret = -EINVAL;
 		goto out;
@@ -867,7 +869,8 @@ static int mcam_cam_configure(struct mcam_camera *cam)
 			 * writing to all the registers to initialize. Otherwise a still image
 			 * grabbed immediately comes out distorted
 			 */
-			if (cam->sensor_type == V4L2_IDENT_SIV120D)
+			if (cam->sensor_type == V4L2_IDENT_SIV120D ||
+			    cam->sensor_type == V4L2_IDENT_SIV121C)
 				msleep(1000);
 			ret = sensor_call(cam, video, s_mbus_fmt, &mbus_fmt);
 		}
@@ -1743,6 +1746,10 @@ static struct siv120d_config siv120d_cfg = {
 	.clock_speed = 24,
 };
 
+static struct siv121c_config siv121c_cfg = {
+	.clock_speed = 24,
+};
+
 int mccic_register(struct mcam_camera *cam)
 {
 	struct i2c_board_info mcam_info[] = {
@@ -1755,6 +1762,11 @@ int mccic_register(struct mcam_camera *cam)
 			.type = "siv120d",
 			.addr = 0x66 >> 1,
 			.platform_data = &siv120d_cfg,
+		},
+		{
+			.type = "siv121c",
+			.addr = 0x66 >> 1,
+			.platform_data = &siv121c_cfg,
 		},
 	};
 	int ret;
@@ -1799,6 +1811,9 @@ int mccic_register(struct mcam_camera *cam)
 
 	/* configs for siv120d */
 	siv120d_cfg.use_smbus = cam->use_smbus;
+
+	/* configs for siv121c */
+	siv121c_cfg.use_smbus = cam->use_smbus;
 
 	/*
 	 * Try to find the sensor.
