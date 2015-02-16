@@ -303,7 +303,7 @@ rm -f $RPM_BUILD_ROOT/usr/include/asm*/irq.h
 make INSTALL_FW_PATH=$RPM_BUILD_ROOT/lib/firmware firmware_install
 %endif
 
-install -m0644 olpc/olpc.fth $RPM_BUILD_ROOT/%{image_install_path}
+install -m0644 olpc/olpc.fth $RPM_BUILD_ROOT/%{image_install_path}/olpc-%{KVERREL}.fth
 
 
 %clean
@@ -328,7 +328,7 @@ DuplicateInstall()
 {
 	local tgt=$1
 	[ -d "$tgt" ] || return 0
-	[ -f /boot/olpc.fth ] && cp -a /boot/olpc.fth $tgt
+	[ -f /boot/olpc-%{KVERREL}.fth ] && cp -a /boot/olpc-%{KVERREL}.fth $tgt
 	[ -f /boot/vmlinuz-%{KVERREL} ] && cp -a /boot/vmlinuz-%{KVERREL} $tgt
 	[ -f /boot/initrd-%{KVERREL}.img ] && cp -a /boot/initrd-%{KVERREL}.img $tgt
 	[ -f /boot/actrd-%{KVERREL}.img ] && cp -a /boot/actrd-%{KVERREL}.img $tgt
@@ -341,6 +341,7 @@ UpdateSymlinks()
 {
 	local tgt=$1
 	[ -d "$tgt" ] || return 0
+	[ -f /boot/olpc-%{KVERREL}.fth ] && ln -sf olpc-%{KVERREL}.fth $tgt/olpc.fth
 	[ -f /boot/vmlinuz-%{KVERREL} ] && ln -sf vmlinuz-%{KVERREL} $tgt/vmlinuz
 	[ -f /boot/initrd-%{KVERREL}.img ] && ln -sf initrd-%{KVERREL}.img $tgt/initrd.img
 	[ -f /boot/actrd-%{KVERREL}.img ] && ln -sf actrd-%{KVERREL}.img $tgt/actrd.img
@@ -368,7 +369,7 @@ fi
 DuplicateUninstall()
 {
 	local tgt=$1
-	rm -f $tgt/vmlinuz-%{KVERREL} $tgt/initrd-%{KVERREL}.img $tgt/actrd-%{KVERREL}.img
+	rm -f $tgt/olpc-%{KVERREL}.fth $tgt/vmlinuz-%{KVERREL} $tgt/initrd-%{KVERREL}.img $tgt/actrd-%{KVERREL}.img
 }
 DuplicateUninstall /bootpart/boot
 DuplicateUninstall /versions/boot/current/boot
@@ -378,7 +379,7 @@ DuplicateUninstall /versions/boot/current/boot
 %defattr(-,root,root)
 /%{image_install_path}/vmlinuz-%{KVERREL}
 /boot/config-%{KVERREL}.xz
-/boot/olpc.fth
+/boot/olpc-%{KVERREL}.fth
 %dir /lib/modules/%{KVERREL}
 /lib/modules/%{KVERREL}/kernel
 /lib/modules/%{KVERREL}/build
