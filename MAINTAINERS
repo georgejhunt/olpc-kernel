@@ -51,9 +51,9 @@ trivial patch so apply some common sense.
 	or does something very odd once a month document it.
 
 	PLEASE remember that submissions must be made under the terms
-	of the OSDL certificate of contribution and should include a
-	Signed-off-by: line.  The current version of this "Developer's
-	Certificate of Origin" (DCO) is listed in the file
+	of the Linux Foundation certificate of contribution and should
+	include a Signed-off-by: line.  The current version of this
+	"Developer's Certificate of Origin" (DCO) is listed in the file
 	Documentation/SubmittingPatches.
 
 6.	Make sure you have the right to send any changes you make. If you
@@ -2427,7 +2427,6 @@ L:	linux-security-module@vger.kernel.org
 S:	Supported
 F:	include/linux/capability.h
 F:	include/uapi/linux/capability.h
-F:	security/capability.c
 F:	security/commoncap.c
 F:	kernel/capability.c
 
@@ -10588,8 +10587,7 @@ F:	drivers/virtio/virtio_input.c
 F:	include/uapi/linux/virtio_input.h
 
 VIA RHINE NETWORK DRIVER
-M:	Roger Luethi <rl@hellgate.ch>
-S:	Maintained
+S:	Orphan
 F:	drivers/net/ethernet/via/via-rhine.c
 
 VIA SD/MMC CARD CONTROLLER DRIVER
