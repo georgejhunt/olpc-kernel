@@ -80,6 +80,11 @@ static const struct regval_list siv121c_yuv422_regs[] = {
 	{0xff, 0xff},
 };
 
+static const struct regval_list siv121c_rgb565_regs[] = {
+	{REG_OUTFMT, 0x8b},
+	{0xff, 0xff},
+};
+
 static const struct regval_list siv121c_vga_regs[] = {
 	{REG_VMODE, 0x4},
 	{0xff, 0xff},
@@ -94,6 +99,11 @@ static const struct siv121c_format_struct {
 		.mbus_code	= V4L2_MBUS_FMT_YUYV8_2X8,
 		.colorspace	= V4L2_COLORSPACE_JPEG,
 		.regs 		= siv121c_yuv422_regs,
+	},
+	{
+		.mbus_code	= V4L2_MBUS_FMT_RGB565_2X8_LE,
+		.colorspace	= V4L2_COLORSPACE_SRGB,
+		.regs		= siv121c_rgb565_regs,
 	},
 };
 #define N_SIV121C_FMTS ARRAY_SIZE(siv121c_formats)
