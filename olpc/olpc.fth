@@ -37,12 +37,13 @@
    " ${DN}${PN}\vmlinuz" expand$ 2dup $file-exists? if
       to boot-device
       " ${DN}${PN}\initrd.img" expand$ to ramdisk
-      \ " extra kernel parameters here" to boot-file
+      " rw console=ttyS0,115200 console=tty0 fbcon=font:SUN12x22 root=/dev/mmcblk0p2 rd_NO_FSTAB" to boot-file
       boot
    else
       2drop
       unsigned-boot
    then
 ;
-
+visible
+unfreeze
 olpc-fth-boot-me
