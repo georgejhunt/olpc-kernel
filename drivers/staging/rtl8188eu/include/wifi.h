@@ -20,13 +20,13 @@
 #ifndef _WIFI_H_
 #define _WIFI_H_
 
+#include <linux/ieee80211.h>
 
 #ifdef BIT
 /* error	"BIT define occurred earlier elsewhere!\n" */
 #undef BIT
 #endif
 #define BIT(x)	(1 << (x))
-
 
 #define WLAN_ETHHDR_LEN		14
 #define WLAN_ETHADDR_LEN	6
@@ -262,7 +262,6 @@ enum WIFI_REG_DOMAIN {
 
 #define get_tofr_ds(pframe)	((GetToDs(pframe) << 1) | GetFrDs(pframe))
 
-
 #define SetMFrag(pbuf)	\
 	*(__le16 *)(pbuf) |= cpu_to_le16(_MORE_FRAG_)
 
@@ -301,11 +300,20 @@ enum WIFI_REG_DOMAIN {
 #define GetPrivacy(pbuf)					\
 	(((*(__le16 *)(pbuf)) & cpu_to_le16(_PRIVACY_)) != 0)
 
+#define ClearPrivacy(pbuf)	\
+	*(__le16 *)(pbuf) &= (~cpu_to_le16(_PRIVACY_))
+
 #define GetOrder(pbuf)					\
 	(((*(__le16 *)(pbuf)) & cpu_to_le16(_ORDER_)) != 0)
 
 #define GetFrameType(pbuf)				\
 	(le16_to_cpu(*(__le16 *)(pbuf)) & (BIT(3) | BIT(2)))
+
+#define SetFrameType(pbuf, type)	\
+	do {	\
+		*(unsigned short *)(pbuf) &= __constant_cpu_to_le16(~(BIT(3) | BIT(2))); \
+		*(unsigned short *)(pbuf) |= __constant_cpu_to_le16(type); \
+	} while (0)
 
 #define GetFrameSubType(pbuf)	(le16_to_cpu(*(__le16 *)(pbuf)) & (BIT(7) |\
 	 BIT(6) | BIT(5) | BIT(4) | BIT(3) | BIT(2)))
@@ -323,6 +331,17 @@ enum WIFI_REG_DOMAIN {
 #define GetFragNum(pbuf)			\
 	(le16_to_cpu(*(__le16 *)((size_t)(pbuf) + 22)) & 0x0f)
 
+#define GetTupleCache(pbuf)			\
+	(cpu_to_le16(*(unsigned short *)((size_t)(pbuf) + 22)))
+
+#define SetFragNum(pbuf, num) \
+	do {    \
+		*(unsigned short *)((size_t)(pbuf) + 22) = \
+			((*(unsigned short *)((size_t)(pbuf) + 22)) &	\
+			le16_to_cpu(~(0x000f))) | \
+			cpu_to_le16(0x0f & (num));     \
+	} while (0)
+
 #define SetSeqNum(pbuf, num) \
 	do {    \
 		*(__le16 *)((size_t)(pbuf) + 22) = \
@@ -332,7 +351,6 @@ enum WIFI_REG_DOMAIN {
 
 #define SetDuration(pbuf, dur) \
 	*(__le16 *)((size_t)(pbuf) + 2) = cpu_to_le16(0xffff & (dur))
-
 
 #define SetPriority(pbuf, tid)	\
 	*(__le16 *)(pbuf) |= cpu_to_le16(tid & 0xf)
@@ -349,7 +367,14 @@ enum WIFI_REG_DOMAIN {
 
 #define GetAMsdu(pbuf) (((le16_to_cpu(*(__le16 *)pbuf)) >> 7) & 0x1)
 
+#define SetAMsdu(pbuf, amsdu)	\
+	*(__le16 *)(pbuf) |= cpu_to_le16((amsdu & 1) << 7)
+
 #define GetAid(pbuf)	(le16_to_cpu(*(__le16 *)((size_t)(pbuf) + 2)) & 0x3fff)
+
+#define GetTid(pbuf)	(le16_to_cpu(*(__le16 *)((size_t)(pbuf) +	\
+			(((GetToDs(pbuf)<<1) | GetFrDs(pbuf)) == 3 ?	\
+			30 : 24))) & 0x000f)
 
 #define GetAddr1Ptr(pbuf)	((unsigned char *)((size_t)(pbuf) + 4))
 
@@ -501,7 +526,6 @@ static inline int IsFrameTypeCtrl(unsigned char *pframe)
 #define _HT_ADD_INFO_IE_	61 /* _HT_EXTRA_INFO_IE_ */
 #define _WAPI_IE_		68
 
-
 #define	EID_BSSCoexistence	72 /*  20/40 BSS Coexistence */
 #define	EID_BSSIntolerantChlReport	73
 #define _RIC_Descriptor_IE_	75
@@ -569,7 +593,6 @@ static inline int IsFrameTypeCtrl(unsigned char *pframe)
 #define _WMM_IE_Length_				7  /*  for WMM STA */
 #define _WMM_Para_Element_Length_		24
 
-
 /*-----------------------------------------------------------------------------
 				Below is the definition for 802.11n
 ------------------------------------------------------------------------------*/
@@ -582,7 +605,6 @@ static inline int IsFrameTypeCtrl(unsigned char *pframe)
 #define GetOrderBit(pbuf)			\
 	(((*(unsigned short *)(pbuf)) & le16_to_cpu(_ORDER_)) != 0)
 
-
 /**
  * struct rtw_ieee80211_bar - HT Block Ack Request
  *
@@ -590,36 +612,20 @@ static inline int IsFrameTypeCtrl(unsigned char *pframe)
  * described in 802.11n draft section 7.2.1.7.1
  */
 struct rtw_ieee80211_bar {
-	unsigned short frame_control;
-	unsigned short duration;
-	unsigned char ra[6];
-	unsigned char ta[6];
-	unsigned short control;
-	unsigned short start_seq_num;
+	__le16 frame_control;
+	__le16 duration;
+	unsigned char ra[ETH_ALEN];
+	unsigned char ta[ETH_ALEN];
+	__le16 control;
+	__le16 start_seq_num;
 } __packed;
 
 /* 802.11 BAR control masks */
 #define IEEE80211_BAR_CTRL_ACK_POLICY_NORMAL     0x0000
 #define IEEE80211_BAR_CTRL_CBMTID_COMPRESSED_BA  0x0004
 
- /**
- * struct rtw_ieee80211_ht_cap - HT capabilities
- *
- * This structure refers to "HT capabilities element" as
- * described in 802.11n draft section 7.3.2.52
- */
-
-struct rtw_ieee80211_ht_cap {
-	unsigned short	cap_info;
-	unsigned char	ampdu_params_info;
-	unsigned char	supp_mcs_set[16];
-	unsigned short	extended_ht_cap_info;
-	unsigned int	tx_BF_cap_info;
-	unsigned char   antenna_selection_info;
-} __packed;
-
 /**
- * struct rtw_ieee80211_ht_cap - HT additional information
+ * struct ieee80211_ht_cap - HT additional information
  *
  * This structure refers to "HT information element" as
  * described in 802.11n draft section 7.3.2.53
@@ -627,8 +633,8 @@ struct rtw_ieee80211_ht_cap {
 struct ieee80211_ht_addt_info {
 	unsigned char	control_chan;
 	unsigned char	ht_param;
-	unsigned short	operation_mode;
-	unsigned short	stbc_param;
+	__le16	operation_mode;
+	__le16	stbc_param;
 	unsigned char	basic_set[16];
 } __packed;
 
@@ -638,8 +644,8 @@ struct HT_caps_element {
 			__le16	HT_caps_info;
 			unsigned char	AMPDU_para;
 			unsigned char	MCS_rate[16];
-			unsigned short	HT_ext_caps;
-			unsigned int	Beamforming_caps;
+			__le16	HT_ext_caps;
+			__le16	Beamforming_caps;
 			unsigned char	ASEL_caps;
 		} HT_cap_element;
 		unsigned char HT_cap[26];
@@ -665,10 +671,11 @@ struct WMM_para_element {
 } __packed;
 
 struct ADDBA_request {
+	unsigned char	action_code;
 	unsigned char	dialog_token;
-	__le16		BA_para_set;
-	unsigned short	BA_timeout_value;
-	unsigned short	BA_starting_seqctrl;
+	__le16	BA_para_set;
+	__le16	BA_timeout_value;
+	__le16	BA_starting_seqctrl;
 } __packed;
 
 enum ht_cap_ampdu_factor {
@@ -725,40 +732,38 @@ enum ht_cap_ampdu_factor {
 #define IEEE80211_MIN_AMPDU_BUF 0x8
 #define IEEE80211_MAX_AMPDU_BUF 0x40
 
-
 /* Spatial Multiplexing Power Save Modes */
 #define WLAN_HT_CAP_SM_PS_STATIC	0
 #define WLAN_HT_CAP_SM_PS_DYNAMIC	1
 #define WLAN_HT_CAP_SM_PS_INVALID	2
 #define WLAN_HT_CAP_SM_PS_DISABLED	3
 
-
 #define OP_MODE_PURE                    0
 #define OP_MODE_MAY_BE_LEGACY_STAS      1
 #define OP_MODE_20MHZ_HT_STA_ASSOCED    2
 #define OP_MODE_MIXED                   3
 
-#define HT_INFO_HT_PARAM_SECONDARY_CHNL_OFF_MASK	((u8)BIT(0) | BIT(1))
-#define HT_INFO_HT_PARAM_SECONDARY_CHNL_ABOVE		((u8)BIT(0))
-#define HT_INFO_HT_PARAM_SECONDARY_CHNL_BELOW		((u8)BIT(0) | BIT(1))
-#define HT_INFO_HT_PARAM_REC_TRANS_CHNL_WIDTH		((u8)BIT(2))
-#define HT_INFO_HT_PARAM_RIFS_MODE			((u8)BIT(3))
-#define HT_INFO_HT_PARAM_CTRL_ACCESS_ONLY		((u8)BIT(4))
-#define HT_INFO_HT_PARAM_SRV_INTERVAL_GRANULARITY	((u8)BIT(5))
+#define HT_INFO_HT_PARAM_SECONDARY_CHNL_OFF_MASK	((u8) BIT(0) | BIT(1))
+#define HT_INFO_HT_PARAM_SECONDARY_CHNL_ABOVE		((u8) BIT(0))
+#define HT_INFO_HT_PARAM_SECONDARY_CHNL_BELOW		((u8) BIT(0) | BIT(1))
+#define HT_INFO_HT_PARAM_REC_TRANS_CHNL_WIDTH		((u8) BIT(2))
+#define HT_INFO_HT_PARAM_RIFS_MODE			((u8) BIT(3))
+#define HT_INFO_HT_PARAM_CTRL_ACCESS_ONLY		((u8) BIT(4))
+#define HT_INFO_HT_PARAM_SRV_INTERVAL_GRANULARITY	((u8) BIT(5))
 
 #define HT_INFO_OPERATION_MODE_OP_MODE_MASK	\
-		((u16)(0x0001 | 0x0002))
+		((u16) (0x0001 | 0x0002))
 #define HT_INFO_OPERATION_MODE_OP_MODE_OFFSET		0
-#define HT_INFO_OPERATION_MODE_NON_GF_DEVS_PRESENT	((u8)BIT(2))
-#define HT_INFO_OPERATION_MODE_TRANSMIT_BURST_LIMIT	((u8)BIT(3))
-#define HT_INFO_OPERATION_MODE_NON_HT_STA_PRESENT	((u8)BIT(4))
+#define HT_INFO_OPERATION_MODE_NON_GF_DEVS_PRESENT	((u8) BIT(2))
+#define HT_INFO_OPERATION_MODE_TRANSMIT_BURST_LIMIT	((u8) BIT(3))
+#define HT_INFO_OPERATION_MODE_NON_HT_STA_PRESENT	((u8) BIT(4))
 
-#define HT_INFO_STBC_PARAM_DUAL_BEACON		((u16)BIT(6))
-#define HT_INFO_STBC_PARAM_DUAL_STBC_PROTECT	((u16)BIT(7))
-#define HT_INFO_STBC_PARAM_SECONDARY_BC		((u16)BIT(8))
-#define HT_INFO_STBC_PARAM_LSIG_TXOP_PROTECT_ALLOWED	((u16)BIT(9))
-#define HT_INFO_STBC_PARAM_PCO_ACTIVE		((u16)BIT(10))
-#define HT_INFO_STBC_PARAM_PCO_PHASE		((u16)BIT(11))
+#define HT_INFO_STBC_PARAM_DUAL_BEACON		((u16) BIT(6))
+#define HT_INFO_STBC_PARAM_DUAL_STBC_PROTECT	((u16) BIT(7))
+#define HT_INFO_STBC_PARAM_SECONDARY_BC		((u16) BIT(8))
+#define HT_INFO_STBC_PARAM_LSIG_TXOP_PROTECT_ALLOWED	((u16) BIT(9))
+#define HT_INFO_STBC_PARAM_PCO_ACTIVE		((u16) BIT(10))
+#define HT_INFO_STBC_PARAM_PCO_PHASE		((u16) BIT(11))
 
 /*	===============WPS Section=============== */
 /*	For WPSv1.0 */
@@ -888,7 +893,7 @@ enum ht_cap_ampdu_factor {
 #define	P2P_STATUS_FAIL_INCOMPATIBLE_PROVSION		0x0A
 #define	P2P_STATUS_FAIL_USER_REJECT			0x0B
 
-/*	Value of Invitation Flags Attribute */
+/*	Value of Inviation Flags Attribute */
 #define	P2P_INVITATION_FLAGS_PERSISTENT			BIT(0)
 
 #define	DMP_P2P_DEVCAP_SUPPORT	(P2P_DEVCAP_SERVICE_DISCOVERY | \
@@ -935,14 +940,13 @@ enum ht_cap_ampdu_factor {
 #define	P2P_PRESENCE_RESPONSE			2
 #define	P2P_GO_DISC_REQUEST			3
 
-
 #define	P2P_MAX_PERSISTENT_GROUP_NUM		10
 
 #define	P2P_PROVISIONING_SCAN_CNT		3
 
 #define	P2P_WILDCARD_SSID_LEN			7
 
-/* default value, used when: (1)p2p disabled or (2)p2p enabled
+/* default value, used when: (1)p2p disabed or (2)p2p enabled
  * but only do 1 scan phase */
 #define	P2P_FINDPHASE_EX_NONE		0
 /*  used when p2p enabled and want to do 1 scan phase and
@@ -1007,13 +1011,13 @@ enum P2P_STATE {
 	P2P_STATE_TX_PROVISION_DIS_REQ = 6,
 	P2P_STATE_RX_PROVISION_DIS_RSP = 7,
 	P2P_STATE_RX_PROVISION_DIS_REQ = 8,
-	/* Doing the group owner negotiation handshake */
+	/* Doing the group owner negoitation handshake */
 	P2P_STATE_GONEGO_ING = 9,
-	/* finish the group negotiation handshake with success */
+	/* finish the group negoitation handshake with success */
 	P2P_STATE_GONEGO_OK = 10,
-	/* finish the group negotiation handshake with failure */
+	/* finish the group negoitation handshake with failure */
 	P2P_STATE_GONEGO_FAIL = 11,
-	/* receiving the P2P Invitation request and match with the profile. */
+	/* receiving the P2P Inviation request and match with the profile. */
 	P2P_STATE_RECV_INVITE_REQ_MATCH = 12,
 	/* Doing the P2P WPS */
 	P2P_STATE_PROVISIONING_ING = 13,
@@ -1023,17 +1027,17 @@ enum P2P_STATE {
 	P2P_STATE_TX_INVITE_REQ = 15,
 	/* Receiving the P2P Invitation response */
 	P2P_STATE_RX_INVITE_RESP_OK = 16,
-	/* receiving the P2P Invitation request and dismatch with the profile. */
+	/* receiving the P2P Inviation request and dismatch with the profile. */
 	P2P_STATE_RECV_INVITE_REQ_DISMATCH = 17,
-	/* receiving the P2P Invitation request and this wifi is GO. */
+	/* receiving the P2P Inviation request and this wifi is GO. */
 	P2P_STATE_RECV_INVITE_REQ_GO = 18,
-	/* receiving the P2P Invitation request to join an existing P2P Group. */
+	/* receiving the P2P Inviation request to join an existing P2P Group. */
 	P2P_STATE_RECV_INVITE_REQ_JOIN = 19,
-	/* receiving the P2P Invitation response with failure */
+	/* recveing the P2P Inviation response with failure */
 	P2P_STATE_RX_INVITE_RESP_FAIL = 20,
-	/* receiving p2p negotiation response with information is not available */
+	/* receiving p2p negoitation response with information is not available */
 	P2P_STATE_RX_INFOR_NOREADY = 21,
-	/* sending p2p negotiation response with information is not available */
+	/* sending p2p negoitation response with information is not available */
 	P2P_STATE_TX_INFOR_NOREADY = 22,
 };
 
@@ -1052,7 +1056,7 @@ enum P2P_PROTO_WK_ID {
 	P2P_PRE_TX_PROVDISC_PROCESS_WK = 2,
 	P2P_PRE_TX_NEGOREQ_PROCESS_WK = 3,
 	P2P_PRE_TX_INVITEREQ_PROCESS_WK = 4,
-	P2P_AP_P2P_CH_SWITCH_PROCESS_WK = 5,
+	P2P_AP_P2P_CH_SWITCH_PROCESS_WK =5,
 	P2P_RO_CH_WK = 6,
 };
 

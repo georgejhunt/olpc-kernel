@@ -23,7 +23,6 @@
 #include <osdep_service.h>
 #include <drv_types.h>
 
-#define DRIVERVERSION	"v4.1.4_6773.20130222"
 #define _drv_always_			1
 #define _drv_emerg_			2
 #define _drv_alert_			3
@@ -33,7 +32,6 @@
 #define _drv_notice_			7
 #define _drv_info_			8
 #define	_drv_debug_			9
-
 
 #define _module_rtl871x_xmit_c_		BIT(0)
 #define _module_xmit_osdep_c_		BIT(1)
@@ -75,7 +73,7 @@ extern u32 GlobalDebugLevel;
 #define DBG_88E_LEVEL(_level, fmt, arg...)				\
 	do {								\
 		if (_level <= GlobalDebugLevel)				\
-			pr_info(DRIVER_PREFIX"ERROR " fmt, ##arg);	\
+			pr_info(DRIVER_PREFIX"INFO " fmt, ##arg);	\
 	} while (0)
 
 #define DBG_88E(...)							\
@@ -106,7 +104,7 @@ extern u32 GlobalDebugLevel;
 			u8	*ptr = (u8 *)_hexdata;			\
 			pr_info("%s", DRIVER_PREFIX);			\
 			pr_info(_titlestring);				\
-			for (__i = 0; __i < (int)_hexdatalen; __i++) {	\
+			for (__i = 0; __i < (int)_hexdatalen; __i++ ) {	\
 				pr_info("%02X%s", ptr[__i],		\
 					 (((__i + 1) % 4) == 0) ?	\
 					 "  " : " ");	\
@@ -262,5 +260,15 @@ int proc_get_rssi_disp(char *page, char **start,
 
 int proc_set_rssi_disp(struct file *file, const char __user *buffer,
 		       unsigned long count, void *data);
+
+#ifdef CONFIG_BT_COEXIST
+int proc_get_btcoex_dbg(char *page, char **start,
+			off_t offset, int count,
+			int *eof, void *data);
+
+int proc_set_btcoex_dbg(struct file *file, const char *buffer,
+			signed long count, void *data);
+
+#endif /* CONFIG_BT_COEXIST */
 
 #endif	/* __RTW_DEBUG_H__ */
